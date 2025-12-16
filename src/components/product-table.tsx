@@ -103,21 +103,21 @@ export function ProductTable({
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 md:py-16 text-muted-foreground">
-        <div className="h-12 w-12 md:h-8 md:w-8 animate-spin rounded-full border-4 md:border-2 border-primary border-t-transparent" />
-        <p className="mt-4 text-lg md:text-sm font-medium">Loading products...</p>
+      <div className="flex flex-col items-center justify-center py-20 text-muted-foreground">
+        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
+        <p className="mt-4 text-sm">Loading products...</p>
       </div>
     )
   }
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center px-4">
-        <div className="flex h-20 w-20 md:h-16 md:w-16 items-center justify-center rounded-full bg-muted">
-          <Package className="h-10 w-10 md:h-8 md:w-8 text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center py-20 text-center px-4">
+        <div className="flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+          <Package className="h-7 w-7 text-muted-foreground" />
         </div>
-        <h3 className="mt-4 text-lg md:text-sm font-semibold">No products found</h3>
-        <p className="mt-2 text-base md:text-sm text-muted-foreground">
+        <h3 className="mt-4 text-base font-medium">No products found</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
           Try adjusting your filters or import some data.
         </p>
       </div>
@@ -125,20 +125,21 @@ export function ProductTable({
   }
 
   return (
-    <div className="space-y-4">
-      <div className="overflow-hidden rounded-lg border border-border">
-        <Table className="min-w-[980px] text-xs">
+    <div className="space-y-0">
+      {/* Horizontal scroll wrapper for mobile */}
+      <div className="overflow-x-auto">
+        <Table className="min-w-[900px]">
           <TableHeader>
-            <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableHead className="sticky left-0 z-20 bg-muted/50 font-semibold border-r border-border/60">
+            <TableRow className="bg-muted/30 hover:bg-muted/30">
+              <TableHead className="sticky left-0 z-20 bg-muted/30 font-medium w-[280px] md:w-[320px]">
                 Product
               </TableHead>
-              <TableHead className="font-semibold">Brand</TableHead>
-              <TableHead className="text-right font-semibold">Qty</TableHead>
-              <TableHead className="font-semibold">Status</TableHead>
-              <TableHead className="text-right font-semibold">Dealer</TableHead>
-              <TableHead className="text-right font-semibold">Retail</TableHead>
-              <TableHead className="text-right font-semibold">Daraz</TableHead>
+              <TableHead className="font-medium w-[140px]">Brand</TableHead>
+              <TableHead className="font-medium text-right w-[100px]">Qty</TableHead>
+              <TableHead className="font-medium w-[100px]">Status</TableHead>
+              <TableHead className="font-medium text-right w-[110px]">Dealer</TableHead>
+              <TableHead className="font-medium text-right w-[110px]">Retail</TableHead>
+              <TableHead className="font-medium text-right w-[110px]">Daraz</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -154,20 +155,23 @@ export function ProductTable({
                 <TableRow
                   key={item.id}
                   onClick={() => onRowClick(item)}
-                  className={cn("cursor-pointer transition-colors hover:bg-muted/50", isEditing && "bg-muted/30")}
+                  className={cn(
+                    "cursor-pointer transition-colors hover:bg-muted/30",
+                    isEditing && "bg-primary/5"
+                  )}
                 >
-                  <TableCell className="sticky left-0 z-10 bg-card font-medium max-w-[420px] border-r border-border/60">
-                    <div className="truncate">{item.name}</div>
+                  <TableCell className="sticky left-0 z-10 bg-card font-medium">
+                    <div className="truncate max-w-[250px] md:max-w-[300px]">{item.name}</div>
                   </TableCell>
-                  <TableCell className="text-muted-foreground max-w-[220px]">
-                    <div className="truncate">{item.brand ?? "—"}</div>
+                  <TableCell className="text-muted-foreground">
+                    <div className="truncate max-w-[120px]">{item.brand ?? "—"}</div>
                   </TableCell>
-                  <TableCell className="text-right font-mono">{formatQty(item.stockQty, item.unit)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatQty(item.stockQty, item.unit)}</TableCell>
                   <TableCell>
                     <StockBadge availability={item.availability} />
                   </TableCell>
                   <TableCell
-                    className={cn("text-right font-mono", canEditPrices && "group")}
+                    className={cn("text-right tabular-nums", canEditPrices && "group")}
                     onClick={(e) => {
                       if (!canEditPrices) return
                       e.stopPropagation()
@@ -220,8 +224,8 @@ export function ProductTable({
                       </div>
                     )}
                   </TableCell>
-                  <TableCell className="text-right font-mono">{formatMoney(derived.retailPrice)}</TableCell>
-                  <TableCell className="text-right font-mono">{formatMoney(derived.darazPrice)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatMoney(derived.retailPrice)}</TableCell>
+                  <TableCell className="text-right tabular-nums">{formatMoney(derived.darazPrice)}</TableCell>
                 </TableRow>
               )
             })}
@@ -229,36 +233,38 @@ export function ProductTable({
         </Table>
       </div>
 
+      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-t border-border pt-4">
-          <p className="text-base md:text-sm text-muted-foreground order-2 md:order-1">
-            Showing{" "}
-            <span className="font-semibold text-foreground">
-              {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, items.length)}
-            </span>{" "}
-            of <span className="font-semibold text-foreground">{items.length.toLocaleString("en-IN")}</span>
+        <div className="flex items-center justify-between gap-4 px-4 py-3 border-t border-border">
+          <p className="text-sm text-muted-foreground">
+            <span className="font-medium text-foreground">
+              {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, items.length)}
+            </span>
+            {" "}of {items.length.toLocaleString("en-IN")}
           </p>
-          <div className="flex items-center gap-3 order-1 md:order-2 w-full md:w-auto">
+          <div className="flex items-center gap-2">
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
-              className="flex-1 md:flex-none h-14 md:h-9 text-base md:text-sm font-semibold rounded-2xl md:rounded-md gap-2 bg-transparent active:scale-[0.98] transition-transform"
+              className="h-8 px-3 rounded-lg gap-1"
             >
-              <ChevronLeft className="h-5 w-5 md:h-4 md:w-4" />
-              Previous
+              <ChevronLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Previous</span>
             </Button>
-            <span className="text-base md:text-sm text-muted-foreground px-2 whitespace-nowrap">
-              <span className="font-semibold text-foreground">{page + 1}</span> / {totalPages}
+            <span className="text-sm text-muted-foreground px-2">
+              {page + 1} / {totalPages}
             </span>
             <Button
               variant="outline"
+              size="sm"
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
-              className="flex-1 md:flex-none h-14 md:h-9 text-base md:text-sm font-semibold rounded-2xl md:rounded-md gap-2 bg-transparent active:scale-[0.98] transition-transform"
+              className="h-8 px-3 rounded-lg gap-1"
             >
-              Next
-              <ChevronRight className="h-5 w-5 md:h-4 md:w-4" />
+              <span className="hidden sm:inline">Next</span>
+              <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>

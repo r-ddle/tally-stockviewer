@@ -2,13 +2,12 @@
 
 import { useEffect, useState } from "react"
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Label } from "@/components/ui/label"
 import { StockBadge } from "@/components/stock-badge"
 import type { Availability } from "@/lib/domain"
-import { Copy, Save, Check, Calculator, Clock, Loader2 } from "lucide-react"
+import { Copy, Save, Check, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 import { ownerHeaders } from "@/lib/owner"
@@ -118,107 +117,82 @@ export function ProductDetailSheet({
     <>
       {product && (
         <div className="space-y-6">
-          {/* Status and actions */}
+          {/* Status and copy */}
           <div className="flex items-center justify-between gap-3">
             <StockBadge availability={product.availability} size="large" showIcon />
             <Button
               variant="outline"
+              size="sm"
               onClick={copyPrices}
-              className="h-12 md:h-9 px-4 text-base md:text-sm font-semibold rounded-2xl md:rounded-md gap-2 bg-transparent active:scale-[0.98] transition-transform"
+              className="gap-2 rounded-lg h-9"
             >
-              {copied ? <Check className="h-5 w-5 md:h-4 md:w-4" /> : <Copy className="h-5 w-5 md:h-4 md:w-4" />}
-              {copied ? "Copied!" : "Copy Prices"}
+              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+              {copied ? "Copied" : "Copy"}
             </Button>
           </div>
 
-          {/* Quantity display - mobile only */}
-          <div className="md:hidden bg-muted/50 rounded-2xl p-4 flex items-center justify-between">
-            <span className="text-base font-medium text-muted-foreground">Current Stock</span>
-            <span className="text-2xl font-bold font-mono">{formatQty(product.stockQty, product.unit)}</span>
+          {/* Stock quantity */}
+          <div className="bg-muted/50 rounded-xl p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Current Stock</span>
+              <span className="text-xl font-semibold tabular-nums">{formatQty(product.stockQty, product.unit)}</span>
+            </div>
           </div>
 
-          {/* Dealer price editor (owner only) */}
-          {canEditPrices ? (
-          <Card className="border-2 md:border">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base md:text-sm font-semibold flex items-center gap-2">
-                <Calculator className="h-5 w-5 md:h-4 md:w-4 text-muted-foreground" />
-                Dealer Price
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4 md:space-y-3">
-              <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-2">
+          {/* Prices grid */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-medium text-muted-foreground">Prices</h3>
+            <div className="grid grid-cols-3 gap-3">
+              <PriceCard label="Dealer" value={formatMoney(product.dealerPrice)} primary />
+              <PriceCard label="Retail" value={formatMoney(derived?.retailPrice ?? null)} />
+              <PriceCard label="Daraz" value={formatMoney(derived?.darazPrice ?? null)} />
+            </div>
+          </div>
+
+          {/* Edit dealer price */}
+          {canEditPrices && (
+            <div className="space-y-3 pt-2 border-t border-border">
+              <Label htmlFor="dealer-price" className="text-sm font-medium">
+                Update Dealer Price
+              </Label>
+              <div className="flex gap-2">
                 <Input
+                  id="dealer-price"
                   type="text"
                   inputMode="decimal"
-                  placeholder="Enter dealer price..."
+                  placeholder="Enter price..."
                   value={dealerPriceInput}
                   onChange={(e) => setDealerPriceInput(e.target.value)}
-                  className="h-14 md:h-10 text-xl md:text-base font-mono rounded-2xl md:rounded-md border-2 md:border"
+                  className="h-10 rounded-lg tabular-nums"
                 />
                 <Button
                   onClick={saveDealerPrice}
                   disabled={saving}
-                  className="h-14 md:h-10 text-base md:text-sm font-semibold rounded-2xl md:rounded-md gap-2 shrink-0 active:scale-[0.98] transition-transform"
+                  className="h-10 px-4 rounded-lg gap-2 shrink-0"
                 >
                   {saving ? (
-                    <Loader2 className="h-5 w-5 md:h-4 md:w-4 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Save className="h-5 w-5 md:h-4 md:w-4" />
+                    <Save className="h-4 w-4" />
                   )}
-                  Save Price
+                  Save
                 </Button>
               </div>
-              {error && <p className="text-base md:text-sm text-destructive font-medium">{error}</p>}
-            </CardContent>
-          </Card>
-          ) : null}
+              {error && <p className="text-sm text-destructive">{error}</p>}
+            </div>
+          )}
 
-          {/* Price tabs */}
-          <Tabs defaultValue="computed" className="w-full">
-            <TabsList className="w-full grid grid-cols-2 h-12 md:h-10 rounded-2xl md:rounded-lg p-1">
-              <TabsTrigger value="computed" className="text-base md:text-sm font-semibold rounded-xl md:rounded-md">
-                Prices
-              </TabsTrigger>
-              <TabsTrigger value="metadata" className="text-base md:text-sm font-semibold rounded-xl md:rounded-md">
-                Details
-              </TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="computed" className="mt-4">
-              <div className="grid grid-cols-2 gap-3">
-                <MobilePriceCard
-                  label="Retail"
-                  formula="÷ 0.75"
-                  value={formatMoney(derived?.retailPrice ?? null)}
-                  variant="primary"
-                />
-                <MobilePriceCard
-                  label="Daraz"
-                  formula="÷ 0.60"
-                  value={formatMoney(derived?.darazPrice ?? null)}
-                  variant="default"
-                />
-              </div>
-            </TabsContent>
-
-            <TabsContent value="metadata" className="mt-4">
-              <Card className="border-2 md:border">
-                <CardContent className="pt-6 space-y-5 md:space-y-4">
-                  <MobileMetadataRow
-                    icon={Clock}
-                    label="Last Seen"
-                    value={product.lastSeenAt ? new Date(product.lastSeenAt).toLocaleString() : "—"}
-                  />
-                  <MobileMetadataRow
-                    icon={Clock}
-                    label="Updated"
-                    value={new Date(product.updatedAt).toLocaleString()}
-                  />
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
+          {/* Metadata */}
+          <div className="space-y-2 pt-2 border-t border-border text-sm">
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Last seen</span>
+              <span>{product.lastSeenAt ? new Date(product.lastSeenAt).toLocaleDateString() : "—"}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Updated</span>
+              <span>{new Date(product.updatedAt).toLocaleDateString()}</span>
+            </div>
+          </div>
         </div>
       )}
     </>
@@ -228,30 +202,24 @@ export function ProductDetailSheet({
     <>
       {isMobile ? (
         <Drawer open={open} onOpenChange={onOpenChange}>
-          <DrawerContent className="max-h-[90vh]">
+          <DrawerContent className="max-h-[85vh]">
             <DrawerHeader className="pb-2">
-              <DrawerTitle className="text-2xl leading-tight text-balance">{product?.name ?? "Product"}</DrawerTitle>
-              <p className="text-lg text-muted-foreground">{product?.brand ?? "—"}</p>
+              <DrawerTitle className="text-xl leading-tight">{product?.name ?? "Product"}</DrawerTitle>
+              <p className="text-sm text-muted-foreground">{product?.brand ?? "—"}</p>
             </DrawerHeader>
-            <div className="px-4 pb-8 pb-[env(safe-area-inset-bottom)] overflow-y-auto">
-              {DetailContent()}
+            <div className="px-4 pb-8 overflow-y-auto">
+              <DetailContent />
             </div>
           </DrawerContent>
         </Drawer>
       ) : (
         <Sheet open={open} onOpenChange={onOpenChange}>
-          <SheetContent className="w-full sm:max-w-lg overflow-y-auto flex-col">
-            <SheetHeader className="space-y-1">
-              <SheetTitle className="text-xl leading-tight pr-6">{product?.name ?? "Product"}</SheetTitle>
-              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-                {product?.brand && <span>{product.brand}</span>}
-                {product?.brand && <span>·</span>}
-                <span>{product ? formatQty(product.stockQty, product.unit) : "—"}</span>
-              </div>
+          <SheetContent className="w-full sm:max-w-md overflow-y-auto">
+            <SheetHeader className="space-y-1 pb-4">
+              <SheetTitle className="text-lg leading-tight pr-6">{product?.name ?? "Product"}</SheetTitle>
+              <p className="text-sm text-muted-foreground">{product?.brand ?? "—"}</p>
             </SheetHeader>
-            <div className="px-4 pb-6 pt-2">
-              {DetailContent()}
-            </div>
+            <DetailContent />
           </SheetContent>
         </Sheet>
       )}
@@ -259,53 +227,27 @@ export function ProductDetailSheet({
   )
 }
 
-function MobilePriceCard({
-  label,
-  formula,
-  value,
-  variant = "default",
-}: {
-  label: string
-  formula: string
-  value: string
-  variant?: "default" | "primary"
-}) {
-  return (
-    <Card className={cn("border-2 md:border", variant === "primary" && "border-primary/30 bg-primary/5")}>
-      <CardContent className="p-5 md:p-4">
-        <div className="flex items-center justify-between gap-2">
-          <span className="text-base md:text-sm text-muted-foreground font-medium">{label}</span>
-          <span className="text-sm md:text-xs text-muted-foreground/70 font-mono">{formula}</span>
-        </div>
-        <p
-          className={cn(
-            "mt-2 md:mt-1 text-2xl md:text-lg font-bold font-mono",
-            variant === "primary" && "text-primary",
-          )}
-        >
-          {value}
-        </p>
-      </CardContent>
-    </Card>
-  )
-}
-
-function MobileMetadataRow({
-  icon: Icon,
+function PriceCard({
   label,
   value,
+  primary = false,
 }: {
-  icon: typeof Clock
   label: string
   value: string
+  primary?: boolean
 }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div className="flex items-center gap-3 md:gap-2 text-base md:text-sm text-muted-foreground">
-        <Icon className="h-5 w-5 md:h-4 md:w-4" />
-        {label}
-      </div>
-      <span className="text-base md:text-sm font-mono">{value}</span>
+    <div className={cn(
+      "rounded-lg p-3 text-center",
+      primary ? "bg-primary/10" : "bg-muted/50"
+    )}>
+      <p className="text-xs text-muted-foreground mb-1">{label}</p>
+      <p className={cn(
+        "text-base font-semibold tabular-nums",
+        primary && "text-primary"
+      )}>
+        {value}
+      </p>
     </div>
   )
 }

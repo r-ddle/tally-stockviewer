@@ -1,22 +1,19 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
+import { Inter } from "next/font/google"
 import "./globals.css"
-import { AppHeader, MobileBottomNav } from "@/components/app-header"
+import { AuthProvider } from "@/components/auth-provider"
+import { AppShell } from "@/components/app-shell"
 
-const _geistSans = Geist({
-  variable: "--font-geist-sans",
+const inter = Inter({
   subsets: ["latin"],
-})
-
-const _geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
+  display: "swap",
+  variable: "--font-sans",
 })
 
 export const metadata: Metadata = {
   title: "Tally Stock Viewer",
-  description: "Import Tally Godown Summary XML and browse products.",
+  description: "View and manage product inventory from Tally exports",
 }
 
 export const viewport: Viewport = {
@@ -24,7 +21,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   maximumScale: 1,
   userScalable: false,
-  themeColor: "#0a0a0a",
+  themeColor: "#ffffff",
 }
 
 export default function RootLayout({
@@ -33,13 +30,11 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="dark">
-      <body className={`${_geistSans.variable} ${_geistMono.variable} font-sans antialiased`}>
-        <div className="min-h-screen flex flex-col">
-          <AppHeader />
-          <div className="flex-1 pb-24 md:pb-0">{children}</div>
-          <MobileBottomNav />
-        </div>
+    <html lang="en" className="light">
+      <body className={`${inter.variable} font-sans antialiased`}>
+        <AuthProvider>
+          <AppShell>{children}</AppShell>
+        </AuthProvider>
       </body>
     </html>
   )

@@ -1,14 +1,10 @@
 "use client"
 
-import { ImportControls } from "@/components/import-controls"
-import { StatCard } from "@/components/stat-card"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { ArrowRight, Package, CheckCircle2, XCircle, AlertTriangle, Clock, FileText } from "lucide-react"
+import { ArrowRight, Package, CheckCircle2, XCircle, AlertTriangle, RefreshCcw } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
-import { useIsMobile } from "@/lib/use-is-mobile"
-import { ownerHeaders, useOwner } from "@/lib/owner"
+import { cn } from "@/lib/utils"
 
 type Summary = {
   total: number
@@ -19,216 +15,155 @@ type Summary = {
   lastImportAt: number | null
 }
 
-type DefaultInfo =
-  | { path: string; exists: true; ext: string; mtimeMs: number; size: number }
-  | { path: string; exists: false; error?: string }
-
-function errorFromBody(body: unknown): string | null {
-  if (!body || typeof body !== "object") return null
-  const error = (body as Record<string, unknown>).error
-  return typeof error === "string" && error.trim() ? error : null
-}
-
-async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(url, { cache: "no-store", ...init })
+async function getJson<T>(url: string): Promise<T> {
+  const res = await fetch(url, { cache: "no-store" })
   return (await res.json()) as T
 }
 
 export default function Home() {
-  const isMobile = useIsMobile()
-  const owner = useOwner()
   const [summary, setSummary] = useState<Summary | null>(null)
-  const [defaultInfo, setDefaultInfo] = useState<DefaultInfo | null>(null)
-  const [status, setStatus] = useState<string | null>(null)
-  const [lastAutoLoad, setLastAutoLoad] = useState<string>("—")
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  const lastImport = summary?.lastImportAt ? new Date(summary.lastImportAt).toLocaleString() : "Never"
+  const lastImport = summary?.lastImportAt
+    ? new Date(summary.lastImportAt).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : "Never"
 
   const refresh = useCallback(async () => {
-    const s = await getJson<Summary>("/api/summary")
-    setSummary(s)
+    setLoading(true)
+    setError(null)
+    try {
+      const s = await getJson<Summary>("/api/summary")
+      setSummary(s)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Failed to load data")
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
-  const maybeAutoLoad = useCallback(async (info: DefaultInfo) => {
-    if (!info.exists) return
-    const prev = Number(localStorage.getItem("tally:lastDefaultMtimeMs") ?? 0)
-    if (!info.mtimeMs || info.mtimeMs <= prev) return
-
-    setStatus("Auto-loading latest export…")
-    const res = await fetch("/api/import/auto", { method: "POST", headers: ownerHeaders(owner.token) })
-    const body = (await res.json()) as { ok: boolean; error?: string; fileMtimeMs?: number }
-    if (!body.ok) {
-      setStatus(body.error ?? "Auto-load failed.")
-      return
-    }
-    if (typeof body.fileMtimeMs === "number") {
-      localStorage.setItem("tally:lastDefaultMtimeMs", String(body.fileMtimeMs))
-      const now = Date.now()
-      localStorage.setItem("tally:lastAutoLoadAt", String(now))
-      setLastAutoLoad(new Date(now).toLocaleString())
-    }
-    setStatus(null)
-  }, [owner.token])
-
   useEffect(() => {
-    ;(async () => {
-      setLoading(true)
-      const v = localStorage.getItem("tally:lastAutoLoadAt")
-      const ms = v ? Number(v) : 0
-      if (ms) setLastAutoLoad(new Date(ms).toLocaleString())
-
-      if (!isMobile && owner.isOwner) {
-        const res = await fetch("/api/import/default-info", { cache: "no-store", headers: ownerHeaders(owner.token) })
-        const body = (await res.json().catch(() => null)) as unknown
-        if (!res.ok) {
-          setDefaultInfo(null)
-          if (res.status === 403) setStatus("Owner token invalid (viewer mode).")
-          else setStatus(errorFromBody(body) ?? "Failed to check default export path.")
-        } else {
-          const info = body as DefaultInfo
-          setDefaultInfo(info)
-          await maybeAutoLoad(info)
-        }
-      } else {
-        setDefaultInfo(null)
-      }
-      await refresh()
-      setLoading(false)
-    })().catch((e) => {
-      setStatus(e instanceof Error ? e.message : "Failed to load dashboard.")
-      setLoading(false)
-    })
-  }, [isMobile, maybeAutoLoad, owner.isOwner, owner.token, refresh])
+    refresh().catch(() => {})
+  }, [refresh])
 
   return (
-    <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 md:py-6 space-y-6 md:space-y-8">
-      {/* Page header */}
-      <div className="space-y-2 md:space-y-1">
-        <h1 className="text-3xl md:text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-lg md:text-base text-muted-foreground">
-          View up-to-date Tally product stock and prices at a glance.
-        </p>
-      </div>
-
-      <div className="grid gap-2 grid-cols-1 lg:grid-cols-4">
-        <StatCard
-          title="Total Products"
-          value={loading ? "—" : (summary?.total ?? 0)}
-          icon={Package}
-          variant="default"
-        />
-        <StatCard
-          title="In Stock"
-          value={loading ? "—" : (summary?.inStock ?? 0)}
-          icon={CheckCircle2}
-          variant="success"
-        />
-        <StatCard
-          title="Out of Stock"
-          value={loading ? "—" : (summary?.outOfStock ?? 0)}
-          icon={XCircle}
-          variant="muted"
-        />
-        <StatCard
-          title="Negative Stock"
-          value={loading ? "—" : (summary?.negative ?? 0)}
-          icon={AlertTriangle}
-          variant="danger"
-        />
-      </div>
-
-      {/* Import section */}
-      <Card className="border-2 md:border">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-xl md:text-base">
-            <FileText className="h-6 w-6 md:h-5 md:w-5 text-muted-foreground" />
-            Import Data
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!isMobile && owner.isOwner ? (
-            <ImportControls
-              onImported={() => {
-                refresh().catch(() => {})
-              }}
-            />
-          ) : (
-            <div className="text-base md:text-sm text-muted-foreground">
-              {isMobile ? "Mobile is read-only." : "Viewer mode is read-only."} Open this app on the owner desktop to
-              import the daily export and update stock.
-            </div>
-          )}
-
-          {/* Status message */}
-          {status && (
-            <p
-              className={
-                status.toLowerCase().includes("fail")
-                  ? "text-base md:text-sm text-destructive font-medium"
-                  : "text-base md:text-sm text-muted-foreground"
-              }
-            >
-              {status}
+    <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 md:py-12">
+      {/* Header section */}
+      <div className="mb-8 md:mb-12">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
+              Dashboard
+            </h1>
+            <p className="mt-1 text-muted-foreground">
+              Last updated: <span className="font-medium text-foreground">{lastImport}</span>
             </p>
-          )}
-
-          {/* Metadata - simplified on mobile */}
-          <div className="flex flex-col md:flex-row md:flex-wrap items-start md:items-center gap-3 md:gap-x-6 md:gap-y-2 text-base md:text-sm border-t border-border pt-4">
-            <div className="flex items-center gap-2 text-muted-foreground w-full md:w-auto justify-between md:justify-start">
-              <span className="flex items-center gap-2">
-                <Clock className="h-5 w-5 md:h-4 md:w-4" />
-                Last import:
-              </span>
-              <span className="font-semibold text-foreground">{lastImport}</span>
-            </div>
-            <div className="flex items-center gap-2 text-muted-foreground w-full md:w-auto justify-between md:justify-start">
-              <span className="flex items-center gap-2">
-                <Clock className="h-5 w-5 md:h-4 md:w-4" />
-                Auto-load:
-              </span>
-              <span className="font-semibold text-foreground">{lastAutoLoad}</span>
-            </div>
           </div>
+          <Button
+            variant="outline"
+            onClick={refresh}
+            disabled={loading}
+            className="gap-2 h-10 rounded-xl"
+          >
+            <RefreshCcw className={cn("h-4 w-4", loading && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
+      </div>
 
-          {/* Default path info - hidden on mobile for simplicity */}
-          {defaultInfo && (
-            <div className="hidden md:block text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
-              <span className="font-medium">Default path:</span> {defaultInfo.path}{" "}
-              {defaultInfo.exists ? (
-                <span className="text-success">
-                  · {defaultInfo.ext} · {new Date(defaultInfo.mtimeMs).toLocaleString()}
-                </span>
-              ) : (
-                <span className="text-destructive">Not found</span>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+      {/* Error state */}
+      {error && (
+        <div className="mb-8 rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
-      <Card className="border-2 border-primary/20">
-        <CardContent className="p-6 md:p-6">
-          <div className="flex flex-col gap-4">
-            <div className="space-y-2 md:space-y-1">
-              <h3 className="text-xl md:text-base font-semibold">Browse Products</h3>
-              <p className="text-base md:text-sm text-muted-foreground">
-                Search, filter, and manage dealer prices for all your products.
-              </p>
-            </div>
-            <Button
-              asChild
-              size="lg"
-              className="h-16 md:h-10 text-lg md:text-sm font-semibold rounded-2xl md:rounded-md gap-3 shadow-lg active:scale-[0.98] transition-transform w-full md:w-auto md:self-start"
-            >
-              <Link href="/products">
-                Open Products
-                <ArrowRight className="h-6 w-6 md:h-4 md:w-4" />
-              </Link>
-            </Button>
+      {/* Stats grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8 md:mb-12">
+        <StatCard
+          label="Total Products"
+          value={loading ? "—" : summary?.total ?? 0}
+          icon={Package}
+          iconColor="text-primary"
+          iconBg="bg-primary/10"
+        />
+        <StatCard
+          label="In Stock"
+          value={loading ? "—" : summary?.inStock ?? 0}
+          icon={CheckCircle2}
+          iconColor="text-success"
+          iconBg="bg-success/10"
+        />
+        <StatCard
+          label="Out of Stock"
+          value={loading ? "—" : summary?.outOfStock ?? 0}
+          icon={XCircle}
+          iconColor="text-muted-foreground"
+          iconBg="bg-muted"
+        />
+        <StatCard
+          label="Negative"
+          value={loading ? "—" : summary?.negative ?? 0}
+          icon={AlertTriangle}
+          iconColor="text-destructive"
+          iconBg="bg-destructive/10"
+        />
+      </div>
+
+      {/* Quick action */}
+      <div className="bg-card border border-border rounded-2xl p-6 md:p-8">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="space-y-1">
+            <h2 className="text-lg md:text-xl font-semibold text-foreground">
+              Browse Products
+            </h2>
+            <p className="text-muted-foreground">
+              Search, filter, and view pricing for all inventory items.
+            </p>
           </div>
-        </CardContent>
-      </Card>
-    </main>
+          <Button asChild size="lg" className="rounded-xl gap-2 font-medium shrink-0">
+            <Link href="/products">
+              View Products
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </Button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function StatCard({
+  label,
+  value,
+  icon: Icon,
+  iconColor,
+  iconBg,
+}: {
+  label: string
+  value: number | string
+  icon: typeof Package
+  iconColor: string
+  iconBg: string
+}) {
+  return (
+    <div className="bg-card border border-border rounded-xl p-4 md:p-5">
+      <div className="flex items-start justify-between gap-3">
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">{label}</p>
+          <p className="text-2xl md:text-3xl font-semibold tabular-nums">
+            {typeof value === "number" ? value.toLocaleString("en-IN") : value}
+          </p>
+        </div>
+        <div className={cn("p-2 rounded-lg shrink-0", iconBg)}>
+          <Icon className={cn("h-5 w-5", iconColor)} />
+        </div>
+      </div>
+    </div>
   )
 }

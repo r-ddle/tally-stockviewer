@@ -50,3 +50,4 @@ next-env.d.ts
 public/samples/GdwnSum.xlsx
 .tmp-dev.err.log
 .tmp-dev.out.log
+FUTURE_ENHANCEMENTS.md

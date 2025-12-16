@@ -49,6 +49,6 @@ export type DbProvider = {
   listBrands(): Promise<string[]>;
   listProducts(params: ListProductsParams): Promise<ProductRow[]>;
   upsertStock(items: UpsertStockItem[]): Promise<{ upserted: number }>;
+  deleteProductsByNameKeys(nameKeys: string[]): Promise<{ deleted: number }>;
   setDealerPrice(productId: string, dealerPrice: number | null): Promise<{ ok: true } | { ok: false; error: string }>;
 };
-

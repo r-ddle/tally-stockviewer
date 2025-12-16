@@ -23,7 +23,8 @@ export const db: DbProvider = (() => {
     process.env.NODE_ENV !== "production" &&
     global.__dbProvider &&
     global.__dbProvider.kind === "neon" &&
-    global.__dbProviderUrl === url
+    global.__dbProviderUrl === url &&
+    typeof (global.__dbProvider as any).deleteProductsByNameKeys === "function"
   ) {
     return global.__dbProvider;
   }

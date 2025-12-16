@@ -177,6 +177,22 @@ export function createSqliteProvider(databaseUrl: string): DbProvider {
       return { upserted: items.length };
     },
 
+    async deleteProductsByNameKeys(nameKeys: string[]) {
+      const unique = Array.from(new Set(nameKeys.map((s) => (s ?? "").trim()).filter(Boolean)));
+      if (unique.length === 0) return { deleted: 0 };
+
+      const stmt = sqlite.prepare(`DELETE FROM products WHERE name_key = ?`);
+      const txn = sqlite.transaction((keys: string[]) => {
+        let deleted = 0;
+        for (const k of keys) {
+          const info = stmt.run(k);
+          deleted += info.changes;
+        }
+        return deleted;
+      });
+      return { deleted: txn(unique) };
+    },
+
     async setDealerPrice(productId: string, dealerPrice: number | null) {
       const exists = sqlite
         .prepare(`SELECT 1 AS ok FROM products WHERE id = ?`)

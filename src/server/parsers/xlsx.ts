@@ -1,4 +1,4 @@
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 import {
   looksLikeBrandHeader,
   normalizeWhitespace,
@@ -8,276 +8,178 @@ import {
 } from "./common";
 import type { ParsedItem } from "./types";
 
-const NAME_HEADERS = ["particulars", "stock item", "item", "name", "product"];
-const QTY_HEADERS = [
-  "closing qty",
-  "closing quantity",
-  "closing balance",
-  "closing",
-  "quantity",
-  "qty",
-  "cl. qty",
-  "cl qty",
-];
-const RATE_HEADERS = ["rate"];
-const VALUE_HEADERS = ["value", "amount"];
-const UNIT_HEADERS = ["unit", "uom"];
-
-function normalizeCell(value: unknown): string {
-  if (value == null) return "";
-  if (typeof value === "string") return normalizeWhitespace(value).toLowerCase();
-  if (typeof value === "number") return String(value);
-  return "";
+function cellText(cell: ExcelJS.Cell): string {
+  return normalizeWhitespace(cell.text ?? "");
 }
 
-function headerMatch(cell: string, headers: string[]): boolean {
-  return headers.some((h) => cell === h || cell.includes(h));
-}
-
-function combinedHeader(rows: unknown[][], rowStart: number, rowEnd: number, col: number): string {
-  const parts: string[] = [];
-  for (let r = rowStart; r <= rowEnd; r += 1) {
-    const row = rows[r] ?? [];
-    const v = normalizeCell(row[col]);
-    if (!v) continue;
-    parts.push(v);
+function cellNumber(cell: ExcelJS.Cell): number | null {
+  const v = cell.value as unknown;
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (v && typeof v === "object" && "result" in (v as any) && typeof (v as any).result === "number") {
+    const n = (v as any).result;
+    return Number.isFinite(n) ? n : null;
   }
-  return parts.join(" ").trim();
+  return parseMaybeNumber(cell.text);
 }
 
-function qtySampleScore(rows: unknown[][], dataStartRow: number, qtyCol: number): number {
-  const limit = Math.min(rows.length, dataStartRow + 60);
-  let score = 0;
-  for (let r = dataStartRow; r < limit; r += 1) {
-    const row = rows[r] ?? [];
-    const v = row[qtyCol];
-    if (typeof v === "number" && Number.isFinite(v)) score += 1;
-    else if (typeof v === "string") {
-      const parsed = parseQty(v);
-      if (parsed.qty != null) score += 1;
-      else if (parseMaybeNumber(v) != null) score += 1;
-    }
-  }
-  return score;
+function extractUnitFromNumFmt(numFmt: string | undefined): string | null {
+  if (!numFmt) return null;
+  // Tally commonly uses formats like:
+  // - 0 " nos"
+  // - ""0" nos"
+  const quoted = Array.from(numFmt.matchAll(/"([^"]*)"/g))
+    .map((m) => normalizeWhitespace(m[1] ?? ""))
+    .filter((s) => /[a-z]/i.test(s));
+  if (quoted.length > 0) return quoted[0] ?? null;
+
+  const tail = numFmt.match(/([A-Za-z][A-Za-z0-9._-]*)\"?\s*$/);
+  return tail ? normalizeWhitespace(tail[1] ?? "") || null : null;
 }
 
-function findHeader(rows: unknown[][]): {
-  headerStartRow: number;
-  headerEndRow: number;
-  nameCol: number;
-  qtyCol: number;
-  rateCol: number | null;
-  valueCol: number | null;
-  unitCol: number | null;
-} | null {
-  const limit = Math.min(rows.length, 120);
-  let best:
-    | {
-        score: number;
-        headerStartRow: number;
-        headerEndRow: number;
-        nameCol: number;
-        qtyCol: number;
-        rateCol: number | null;
-        valueCol: number | null;
-        unitCol: number | null;
-      }
-    | null = null;
+type TableRow = {
+  rowNumber: number;
+  name: string;
+  qty: number | null;
+  unit: string | null;
+  rate: number | null;
+  value: number | null;
+  isBold: boolean;
+  totalsNumeric: boolean;
+};
 
-  for (let headerStartRow = 0; headerStartRow < limit; headerStartRow += 1) {
-    const startRow = rows[headerStartRow] ?? [];
-    const startCells = startRow.map(normalizeCell);
-
-    const nameCol = startCells.findIndex((c) => headerMatch(c, NAME_HEADERS));
-    if (nameCol < 0) continue;
-
-    const maxHeaderEnd = Math.min(rows.length - 1, headerStartRow + 10);
-    for (let headerEndRow = headerStartRow; headerEndRow <= maxHeaderEnd; headerEndRow += 1) {
-      const row = rows[headerEndRow] ?? [];
-      const cells = row.map(normalizeCell);
-
-      const qtyCandidates: number[] = [];
-      for (let c = 0; c < cells.length; c += 1) {
-        if (c === nameCol) continue;
-        const cell = cells[c] ?? "";
-        if (headerMatch(cell, QTY_HEADERS)) qtyCandidates.push(c);
-      }
-      if (qtyCandidates.length === 0) continue;
-
-      const unitColRaw = cells.findIndex((c) => headerMatch(c, UNIT_HEADERS));
-      const unitCol = unitColRaw >= 0 ? unitColRaw : null;
-      const rateColRaw = cells.findIndex((c) => headerMatch(c, RATE_HEADERS));
-      const rateCol = rateColRaw >= 0 ? rateColRaw : null;
-      const valueColRaw = cells.findIndex((c) => headerMatch(c, VALUE_HEADERS));
-      const valueCol = valueColRaw >= 0 ? valueColRaw : null;
-
-      for (const qtyCol of qtyCandidates) {
-        const hdr = combinedHeader(rows, headerStartRow, headerEndRow, qtyCol);
-        const dataStartRow = headerEndRow + 1;
-        const sample = qtySampleScore(rows, dataStartRow, qtyCol);
-
-        let score = 0;
-        score += 5; // found name column
-        score += 3; // found qty label
-        if (hdr.includes("closing")) score += 5;
-        if (hdr.includes("balance")) score += 2;
-        if (hdr.includes("opening")) score -= 4;
-        if (hdr.includes("inward") || hdr.includes("outward")) score -= 2;
-        if (unitCol != null) score += 1;
-        score += Math.min(sample, 50); // prefer columns that look like quantities
-
-        if (!best || score > best.score) {
-          best = { score, headerStartRow, headerEndRow, nameCol, qtyCol, rateCol, valueCol, unitCol };
-        }
-      }
-    }
-  }
-
-  return best
-    ? {
-        headerStartRow: best.headerStartRow,
-        headerEndRow: best.headerEndRow,
-        nameCol: best.nameCol,
-        qtyCol: best.qtyCol,
-        rateCol: best.rateCol,
-        valueCol: best.valueCol,
-        unitCol: best.unitCol,
-      }
-    : null;
+function findDataStartRow(rows: TableRow[], defaultStart: number) {
+  const candidate = rows.find((r) => r.rowNumber >= defaultStart && r.isBold && r.totalsNumeric && !shouldIgnoreRowName(r.name));
+  return candidate ? candidate.rowNumber : defaultStart;
 }
 
-export function parseTallyXlsx(buffer: Buffer): ParsedItem[] {
-  const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
-  if (workbook.SheetNames.length === 0) return [];
+function detectStyleAvailable(rows: TableRow[]): boolean {
+  // In the real export, brand headers are bold. If we never see a bold row in the table area, styles likely weren't read.
+  return rows.some((r) => r.isBold);
+}
 
-  const allItems: ParsedItem[] = [];
-  for (const sheetName of workbook.SheetNames) {
-    const sheet = workbook.Sheets[sheetName];
-    if (!sheet) continue;
+function computeValidatedBrandRows(rows: TableRow[]): Set<number> {
+  // Fallback path when bold styles aren't available:
+  // - consider "brand-looking" rows as candidates
+  // - validate by ensuring candidate qty == sum of following product qty until next candidate
+  const candidates = rows
+    .filter((r) => r.totalsNumeric && looksLikeBrandHeader(r.name) && !shouldIgnoreRowName(r.name))
+    .map((r) => r.rowNumber);
 
-    const rows = XLSX.utils.sheet_to_json(sheet, {
-      header: 1,
-      // Use formatted text so Tally-style quantities like `56 nos` are preserved even when stored
-      // as numeric cells with a display format (raw numbers would lose the unit).
-      raw: false,
-      defval: "",
-      blankrows: true,
-    }) as unknown[][];
+  const byRow = new Map<number, TableRow>();
+  for (const r of rows) byRow.set(r.rowNumber, r);
 
-    const header = findHeader(rows);
-    if (!header) continue;
+  const validated = new Set<number>();
+  for (let i = 0; i < candidates.length; i += 1) {
+    const start = candidates[i]!;
+    const end = candidates[i + 1] ?? Number.POSITIVE_INFINITY;
+    const header = byRow.get(start);
+    if (!header || header.qty == null) continue;
 
-    const dataStartRow = header.headerEndRow + 1;
-    const items: ParsedItem[] = [];
-    let currentBrand: string | null = null;
-    let emptyStreak = 0;
-
-    for (let r = dataStartRow; r < rows.length; r += 1) {
-      const row = rows[r] ?? [];
-      const nameRaw = row[header.nameCol];
-      const name =
-        typeof nameRaw === "string"
-          ? normalizeWhitespace(nameRaw)
-          : normalizeWhitespace(String(nameRaw ?? ""));
-      if (!name) {
-        emptyStreak += 1;
-        if (emptyStreak >= 12) break;
-        continue;
-      }
-      emptyStreak = 0;
-      if (shouldIgnoreRowName(name)) continue;
-
-      const qtyCell = row[header.qtyCol];
-      const unitCell = header.unitCol != null ? row[header.unitCol] : null;
-      const rateCell = header.rateCol != null ? row[header.rateCol] : null;
-      const valueCell = header.valueCol != null ? row[header.valueCol] : null;
-
-      let qty: number | null = null;
-      let unit: string | null = null;
-
-      if (typeof qtyCell === "string") {
-        const parsedQty = parseQty(qtyCell);
-        qty = parsedQty.qty;
-        unit = parsedQty.unit;
-      } else if (typeof qtyCell === "number") {
-        qty = Number.isFinite(qtyCell) ? qtyCell : null;
-        const u = typeof unitCell === "string" ? normalizeWhitespace(unitCell) : null;
-        unit = u || null;
-      } else {
-        qty = parseMaybeNumber(qtyCell);
-        if (qty != null && typeof unitCell === "string") unit = normalizeWhitespace(unitCell) || null;
-      }
-
-      const rate = parseMaybeNumber(rateCell);
-      const value = parseMaybeNumber(valueCell);
-
-      // Newer Tally exports often include brand total rows with totals in Qty/Rate/Value.
-      // Treat a short "group" row as the brand header when the following row looks like a product.
-      if (looksLikeBrandHeader(name)) {
-        let nextName: string | null = null;
-        for (let look = r + 1; look < Math.min(rows.length, r + 5); look += 1) {
-          const nextRow = rows[look] ?? [];
-          const nextRaw = nextRow[header.nameCol];
-          const candidate =
-            typeof nextRaw === "string"
-              ? normalizeWhitespace(nextRaw)
-              : normalizeWhitespace(String(nextRaw ?? ""));
-          if (candidate) {
-            nextName = candidate;
-            break;
-          }
-        }
-        if (nextName && !looksLikeBrandHeader(nextName)) {
-          currentBrand = name;
-          continue;
-        }
-      }
-
-      if (!looksLikeBrandHeader(name) && rate != null && value != null) {
-        // Fallback: some brand names include product-like words; use totals + lookahead.
-        let nextName: string | null = null;
-        for (let look = r + 1; look < Math.min(rows.length, r + 5); look += 1) {
-          const nextRow = rows[look] ?? [];
-          const nextRaw = nextRow[header.nameCol];
-          const candidate =
-            typeof nextRaw === "string"
-              ? normalizeWhitespace(nextRaw)
-              : normalizeWhitespace(String(nextRaw ?? ""));
-          if (candidate) {
-            nextName = candidate;
-            break;
-          }
-        }
-        if (
-          nextName &&
-          name.length <= 35 &&
-          !/\d/.test(name) &&
-          !shouldIgnoreRowName(name) &&
-          !looksLikeBrandHeader(nextName)
-        ) {
-          currentBrand = name;
-          continue;
-        }
-      }
-
-      if (/^(opening|closing)\b/i.test(name)) continue;
-
-      items.push({
-        name,
-        brand: currentBrand,
-        qty,
-        unit,
-      });
+    let sum = 0;
+    let productCount = 0;
+    for (const r of rows) {
+      if (r.rowNumber <= start) continue;
+      if (r.rowNumber >= end) break;
+      if (!r.name || shouldIgnoreRowName(r.name)) continue;
+      if (r.totalsNumeric && looksLikeBrandHeader(r.name)) continue;
+      if (r.qty == null) continue;
+      sum += r.qty;
+      productCount += 1;
     }
 
-    allItems.push(...items);
+    const diff = Math.abs(sum - header.qty);
+    if (productCount > 0 && diff < 1e-6) validated.add(start);
   }
 
-  if (allItems.length === 0) {
+  return validated;
+}
+
+export async function parseTallyXlsx(buffer: Buffer): Promise<ParsedItem[]> {
+  const workbook = new ExcelJS.Workbook();
+  // ExcelJS types lag behind Node's Buffer generics in newer @types/node.
+  await workbook.xlsx.load(buffer as any);
+  const worksheet = workbook.getWorksheet("Feeder Stores") ?? workbook.worksheets[0];
+  if (!worksheet) return [];
+
+  const rows: TableRow[] = [];
+  let emptyStreak = 0;
+
+  // Pull rows 1..N first, then decide the actual start row.
+  for (let r = 1; r <= worksheet.rowCount; r += 1) {
+    const row = worksheet.getRow(r);
+    const name = cellText(row.getCell(1));
+    const qtyCell = row.getCell(2);
+    const rateCell = row.getCell(3);
+    const valueCell = row.getCell(4);
+
+    const qty = cellNumber(qtyCell);
+    const rate = cellNumber(rateCell);
+    const value = cellNumber(valueCell);
+
+    let unit = extractUnitFromNumFmt(qtyCell.numFmt);
+    if (!unit) {
+      const parsed = parseQty(qtyCell.text ?? "");
+      unit = parsed.unit;
+    }
+
+    const isBold = row.getCell(1).font?.bold === true;
+    const totalsNumeric = qty != null && rate != null && value != null;
+
+    if (!name && qty == null && rate == null && value == null) {
+      emptyStreak += 1;
+      if (emptyStreak >= 30 && r > 30) break;
+      continue;
+    }
+    emptyStreak = 0;
+
+    rows.push({ rowNumber: r, name, qty, unit, rate, value, isBold, totalsNumeric });
+  }
+
+  const startRow = findDataStartRow(rows, 13);
+  const tableRows = rows.filter((r) => r.rowNumber >= startRow);
+  if (tableRows.length === 0) return [];
+
+  const styleAvailable = detectStyleAvailable(tableRows);
+  const validatedFallbackBrands = styleAvailable ? new Set<number>() : computeValidatedBrandRows(tableRows);
+
+  const items: ParsedItem[] = [];
+  let currentBrand: string | null = null;
+
+  for (const r of tableRows) {
+    if (!r.name) continue;
+
+    // Ignore grand totals and other summary rows.
+    if (shouldIgnoreRowName(r.name)) {
+      if (/^grand\s+total\b/i.test(r.name)) break;
+      continue;
+    }
+
+    const isBrandHeader = styleAvailable
+      ? r.isBold && r.totalsNumeric
+      : validatedFallbackBrands.has(r.rowNumber);
+
+    if (isBrandHeader) {
+      currentBrand = r.name;
+      continue;
+    }
+
+    // Product row
+    if (r.qty == null) continue;
+    if (!currentBrand) continue;
+
+    items.push({
+      name: r.name,
+      brand: currentBrand,
+      qty: r.qty,
+      unit: r.unit,
+    });
+  }
+
+  if (items.length === 0) {
     throw new Error(
-      'Could not detect a usable table in the XLSX. Expected a "Particulars" (name) column and a Closing Balance "Quantity" column.',
+      'No products detected in the XLSX. Expected the "Feeder Stores" sheet with a 4-column table starting at row 13 (Particulars, Quantity, Rate, Value).',
     );
   }
 
-  return allItems;
+  return items;
 }

@@ -9,8 +9,8 @@ import { db } from "@/server/db";
 
 export type ImportSource = "auto" | "upload" | "sample";
 
-function parseByExtension(ext: string, content: Buffer): ParsedItem[] {
-  if (ext === ".xlsx") return parseTallyXlsx(content);
+async function parseByExtension(ext: string, content: Buffer): Promise<ParsedItem[]> {
+  if (ext === ".xlsx") return await parseTallyXlsx(content);
   if (ext === ".xml") return parseTallyXml(content.toString("utf8"));
   throw new Error(`Unsupported file type: ${ext || "(no extension)"}. Expected .xlsx or .xml`);
 }
@@ -19,7 +19,7 @@ export async function importFromPath(filePath: string, source: ImportSource) {
   const stat = await fs.stat(filePath);
   const ext = path.extname(filePath).toLowerCase();
   const content = await fs.readFile(filePath);
-  const parsed = parseByExtension(ext, content);
+  const parsed = await parseByExtension(ext, content);
   if (parsed.length === 0) {
     throw new Error(
       `No items detected in ${path.basename(filePath)}. Ensure the export is a Tally Godown Summary and includes a Closing Qty column/field.`,
@@ -39,7 +39,7 @@ export async function importFromPath(filePath: string, source: ImportSource) {
 
 export async function importFromUpload(filename: string, content: Buffer) {
   const ext = path.extname(filename).toLowerCase();
-  const parsed = parseByExtension(ext, content);
+  const parsed = await parseByExtension(ext, content);
   if (parsed.length === 0) {
     throw new Error(
       `No items detected in ${filename}. Ensure the export is a Tally Godown Summary and includes a Closing Qty column/field.`,
@@ -78,6 +78,12 @@ export async function syncParsedItems(items: ParsedItem[]) {
   }));
 
   const result = await db.upsertStock(normalized);
+  // Guard against a common bad-import failure mode where brand total/header rows got inserted
+  // as products in older versions. Brand header names should never be product rows.
+  const brandNameKeys = Array.from(
+    new Set(normalized.map((n) => n.brand).filter(Boolean).map((b) => nameKeyFromName(String(b)))),
+  );
+  await db.deleteProductsByNameKeys(brandNameKeys);
 
   return { upserted: result.upserted };
 }

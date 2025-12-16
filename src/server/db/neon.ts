@@ -201,6 +201,24 @@ export function createNeonProvider(databaseUrl: string): DbProvider {
       return { upserted: items.length };
     },
 
+    async deleteProductsByNameKeys(nameKeys: string[]) {
+      await ensureSchema();
+      const unique = Array.from(new Set(nameKeys.map((s) => (s ?? "").trim()).filter(Boolean)));
+      if (unique.length === 0) return { deleted: 0 };
+
+      let deleted = 0;
+      const chunkSize = 400;
+      for (let i = 0; i < unique.length; i += chunkSize) {
+        const chunk = unique.slice(i, i + chunkSize);
+        const placeholders = chunk.map((_, idx) => `$${idx + 1}`).join(",");
+        const rows = (await sql.query(`DELETE FROM products WHERE name_key IN (${placeholders}) RETURNING 1`, chunk)) as Array<
+          Record<string, unknown>
+        >;
+        deleted += rows.length;
+      }
+      return { deleted };
+    },
+
     async setDealerPrice(productId: string, dealerPrice: number | null) {
       await ensureSchema();
       const now = Date.now();

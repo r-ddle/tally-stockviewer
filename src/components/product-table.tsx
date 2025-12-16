@@ -5,10 +5,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { StockBadge } from "@/components/stock-badge"
 import type { Availability } from "@/lib/domain"
-import { ChevronLeft, ChevronRight, Package, Loader2, Pencil, X, Check } from "lucide-react"
+import { ChevronLeft, ChevronRight, Package, Loader2, Pencil, X, Check, ChevronDown } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { ownerHeaders } from "@/lib/owner"
 import { cn } from "@/lib/utils"
+import { useIsMobile } from "@/lib/use-is-mobile"
 
 type ProductRow = {
   id: string
@@ -54,10 +55,12 @@ export function ProductTable({
   onDealerPriceSaved,
   onError,
 }: ProductTableProps) {
+  const isMobile = useIsMobile()
   const [page, setPage] = useState(0)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [editingValue, setEditingValue] = useState<string>("")
   const [savingId, setSavingId] = useState<string | null>(null)
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   useEffect(() => {
     setPage(0)
@@ -124,6 +127,121 @@ export function ProductTable({
     )
   }
 
+  // Mobile: Card-based view with expandable inline details
+  if (isMobile) {
+    return (
+      <div className="space-y-0">
+        <div className="divide-y divide-border">
+          {paginatedItems.map((item) => {
+            const isExpanded = expandedId === item.id
+            const derived = computeDerivedPrices(item.dealerPrice)
+
+            return (
+              <div key={item.id} className="bg-card">
+                {/* Main row - always visible */}
+                <button
+                  onClick={() => setExpandedId(isExpanded ? null : item.id)}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-left active:bg-muted/50"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{item.name}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {item.brand ?? "No brand"} · {formatQty(item.stockQty, item.unit)}
+                    </p>
+                  </div>
+                  <StockBadge availability={item.availability} size="small" />
+                  <ChevronDown className={cn(
+                    "h-4 w-4 text-muted-foreground shrink-0 transition-transform",
+                    isExpanded && "rotate-180"
+                  )} />
+                </button>
+
+                {/* Expanded details */}
+                {isExpanded && (
+                  <div className="px-4 pb-4 space-y-3 bg-muted/30">
+                    {/* Price grid */}
+                    <div className="grid grid-cols-3 gap-2">
+                      <div className="bg-primary/10 rounded-lg p-2.5 text-center">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Dealer</p>
+                        <p className="text-sm font-semibold tabular-nums text-primary">{formatMoney(item.dealerPrice)}</p>
+                      </div>
+                      <div className="bg-card rounded-lg p-2.5 text-center border border-border">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Retail</p>
+                        <p className="text-sm font-semibold tabular-nums">{formatMoney(derived.retailPrice)}</p>
+                      </div>
+                      <div className="bg-card rounded-lg p-2.5 text-center border border-border">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Daraz</p>
+                        <p className="text-sm font-semibold tabular-nums">{formatMoney(derived.darazPrice)}</p>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => onRowClick(item)}
+                        className="flex-1 h-9 rounded-lg text-xs"
+                      >
+                        View Details
+                      </Button>
+                      {canEditPrices && (
+                        <Button
+                          size="sm"
+                          onClick={() => onRowClick(item)}
+                          className="flex-1 h-9 rounded-lg text-xs gap-1"
+                        >
+                          <Pencil className="h-3 w-3" />
+                          Edit Price
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
+
+        {/* Mobile Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between gap-4 px-4 py-3 border-t border-border">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">
+                {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, items.length)}
+              </span>
+              {" "}of {items.length.toLocaleString("en-IN")}
+            </p>
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.max(0, p - 1))}
+                disabled={page === 0}
+                className="h-8 w-8 p-0 rounded-lg"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {page + 1}/{totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                disabled={page >= totalPages - 1}
+                className="h-8 w-8 p-0 rounded-lg"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  // Desktop: Table view
   return (
     <div className="space-y-0">
       {/* Horizontal scroll wrapper for mobile */}

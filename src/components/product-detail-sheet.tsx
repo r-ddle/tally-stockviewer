@@ -1,7 +1,7 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet"
+import { useEffect, useState, useMemo } from "react"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
@@ -71,15 +71,30 @@ export function ProductDetailSheet({
     }
   }, [productDealerPrice, productId])
 
+  // Live calculation: compute prices from input value in real-time
+  const livePrice = useMemo(() => {
+    const cleaned = dealerPriceInput.replace(/,/g, "").trim()
+    const parsed = cleaned === "" ? null : Number.parseFloat(cleaned)
+    return parsed != null && Number.isFinite(parsed) ? parsed : null
+  }, [dealerPriceInput])
+
+  const liveDerived = useMemo(() => {
+    return computeDerivedPrices(livePrice)
+  }, [livePrice, computeDerivedPrices])
+
+  // Check if input has unsaved changes
+  const hasChanges = useMemo(() => {
+    if (productDealerPrice == null && livePrice == null) return false
+    return productDealerPrice !== livePrice
+  }, [productDealerPrice, livePrice])
+
   const saveDealerPrice = async () => {
     if (!canEditPrices) return
     if (!product) return
     setSaving(true)
     setError(null)
     try {
-      const cleaned = dealerPriceInput.replace(/,/g, "").trim()
-      const parsed = cleaned === "" ? null : Number.parseFloat(cleaned)
-      const dealerPrice = parsed != null && Number.isFinite(parsed) ? parsed : null
+      const dealerPrice = livePrice
       const res = await fetch(`/api/products/${product.id}/price`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...ownerHeaders(ownerToken) },
@@ -97,21 +112,18 @@ export function ProductDetailSheet({
 
   const copyPrices = async () => {
     if (!product) return
-    const d = computeDerivedPrices(product.dealerPrice)
     const lines = [
       product.name,
       `Brand: ${product.brand ?? "—"}`,
       `Qty: ${formatQty(product.stockQty, product.unit)}`,
-      `Dealer: ${formatMoney(product.dealerPrice)}`,
-      `Retail: ${formatMoney(d.retailPrice)}`,
-      `Daraz: ${formatMoney(d.darazPrice)}`,
+      `Dealer: ${formatMoney(livePrice)}`,
+      `Retail: ${formatMoney(liveDerived.retailPrice)}`,
+      `Daraz: ${formatMoney(liveDerived.darazPrice)}`,
     ]
     await navigator.clipboard.writeText(lines.join("\n"))
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
-
-  const derived = product ? computeDerivedPrices(product.dealerPrice) : null
 
   const DetailContent = () => (
     <>
@@ -139,13 +151,15 @@ export function ProductDetailSheet({
             </div>
           </div>
 
-          {/* Prices grid */}
+          {/* Prices grid - now shows live calculated prices */}
           <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">Prices</h3>
+            <h3 className="text-sm font-medium text-muted-foreground">
+              Prices {hasChanges && <span className="text-yellow-600">(unsaved)</span>}
+            </h3>
             <div className="grid grid-cols-3 gap-3">
-              <PriceCard label="Dealer" value={formatMoney(product.dealerPrice)} primary />
-              <PriceCard label="Retail" value={formatMoney(derived?.retailPrice ?? null)} />
-              <PriceCard label="Daraz" value={formatMoney(derived?.darazPrice ?? null)} />
+              <PriceCard label="Dealer" value={formatMoney(livePrice)} primary highlight={hasChanges} />
+              <PriceCard label="Retail" value={formatMoney(liveDerived.retailPrice)} highlight={hasChanges} />
+              <PriceCard label="Daraz" value={formatMoney(liveDerived.darazPrice)} highlight={hasChanges} />
             </div>
           </div>
 
@@ -167,7 +181,7 @@ export function ProductDetailSheet({
                 />
                 <Button
                   onClick={saveDealerPrice}
-                  disabled={saving}
+                  disabled={saving || !hasChanges}
                   className="h-10 px-4 rounded-lg gap-2 shrink-0"
                 >
                   {saving ? (
@@ -198,32 +212,33 @@ export function ProductDetailSheet({
     </>
   )
 
-  return (
-    <>
-      {isMobile ? (
-        <Drawer open={open} onOpenChange={onOpenChange}>
-          <DrawerContent className="max-h-[85vh]">
-            <DrawerHeader className="pb-2">
-              <DrawerTitle className="text-xl leading-tight">{product?.name ?? "Product"}</DrawerTitle>
-              <p className="text-sm text-muted-foreground">{product?.brand ?? "—"}</p>
-            </DrawerHeader>
-            <div className="px-4 pb-8 overflow-y-auto">
-              <DetailContent />
-            </div>
-          </DrawerContent>
-        </Drawer>
-      ) : (
-        <Sheet open={open} onOpenChange={onOpenChange}>
-          <SheetContent className="w-full sm:max-w-md overflow-y-auto">
-            <SheetHeader className="space-y-1 pb-4">
-              <SheetTitle className="text-lg leading-tight pr-6">{product?.name ?? "Product"}</SheetTitle>
-              <p className="text-sm text-muted-foreground">{product?.brand ?? "—"}</p>
-            </SheetHeader>
+  // Use Drawer for mobile, Dialog for desktop
+  if (isMobile) {
+    return (
+      <Drawer open={open} onOpenChange={onOpenChange}>
+        <DrawerContent className="max-h-[85vh]">
+          <DrawerHeader className="pb-2">
+            <DrawerTitle className="text-xl leading-tight">{product?.name ?? "Product"}</DrawerTitle>
+            <p className="text-sm text-muted-foreground">{product?.brand ?? "—"}</p>
+          </DrawerHeader>
+          <div className="px-4 pb-8 overflow-y-auto">
             <DetailContent />
-          </SheetContent>
-        </Sheet>
-      )}
-    </>
+          </div>
+        </DrawerContent>
+      </Drawer>
+    )
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-lg leading-tight pr-6">{product?.name ?? "Product"}</DialogTitle>
+          <DialogDescription>{product?.brand ?? "—"}</DialogDescription>
+        </DialogHeader>
+        <DetailContent />
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -231,15 +246,18 @@ function PriceCard({
   label,
   value,
   primary = false,
+  highlight = false,
 }: {
   label: string
   value: string
   primary?: boolean
+  highlight?: boolean
 }) {
   return (
     <div className={cn(
-      "rounded-lg p-3 text-center",
-      primary ? "bg-primary/10" : "bg-muted/50"
+      "rounded-lg p-3 text-center transition-colors",
+      primary ? "bg-primary/10" : "bg-muted/50",
+      highlight && "ring-2 ring-primary/30"
     )}>
       <p className="text-xs text-muted-foreground mb-1">{label}</p>
       <p className={cn(

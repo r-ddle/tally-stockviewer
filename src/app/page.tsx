@@ -5,6 +5,8 @@ import Link from "next/link"
 import { ArrowRight, Package, CheckCircle2, XCircle, AlertTriangle, RefreshCcw } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
+import { useAuthContext } from "@/components/auth-provider"
+import { ImportControls } from "@/components/import-controls"
 
 type Summary = {
   total: number
@@ -21,6 +23,7 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 export default function Home() {
+  const auth = useAuthContext()
   const [summary, setSummary] = useState<Summary | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -134,6 +137,21 @@ export default function Home() {
           </Button>
         </div>
       </div>
+
+      {/* Import controls for owner only */}
+      {auth.isOwner && (
+        <div className="mt-6 md:mt-8 bg-card border border-border rounded-2xl p-6 md:p-8">
+          <div className="space-y-1 mb-6">
+            <h2 className="text-lg md:text-xl font-semibold text-foreground">
+              Import Data
+            </h2>
+            <p className="text-muted-foreground">
+              Load stock data from Tally exports or upload files.
+            </p>
+          </div>
+          <ImportControls onImported={() => refresh()} />
+        </div>
+      )}
     </div>
   )
 }

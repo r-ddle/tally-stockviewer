@@ -1,13 +1,15 @@
 "use client";
 
 import { createContext, useContext, useEffect, type ReactNode } from "react";
-import { useAuth, type AuthState } from "@/lib/auth";
+import { useAuth, type AuthState, type UserRole } from "@/lib/auth";
 import { useRouter, usePathname } from "next/navigation";
 
 interface AuthContextValue extends AuthState {
   login: (username: string, password: string) => { success: boolean; error?: string };
   logout: () => void;
   isLoading: boolean;
+  isOwner: boolean;
+  role: UserRole | null;
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null);

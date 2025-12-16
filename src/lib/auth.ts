@@ -5,22 +5,27 @@ import { useEffect, useState, useCallback } from "react";
 const AUTH_KEY = "tally:auth";
 const AUTH_EVENT = "tally:authChanged";
 
+// Account types: owner can import/edit, viewer can only view
+export type UserRole = "owner" | "viewer";
+
 // Simple hardcoded credentials for internal use
-const VALID_CREDENTIALS = {
-  username: "ralhum",
-  password: "rtx786",
-};
+const VALID_USERS: Array<{ username: string; password: string; role: UserRole }> = [
+  { username: "tom", password: "admin786", role: "owner" },
+  { username: "ralhum", password: "rtx786", role: "viewer" },
+];
 
 export interface AuthState {
   isAuthenticated: boolean;
   username: string | null;
   token: string | null;
+  role: UserRole | null;
 }
 
 interface StoredAuth {
   username: string;
   token: string;
   expiresAt: number;
+  role: UserRole;
 }
 
 // Token validity: 30 days
@@ -52,23 +57,28 @@ export function getStoredAuth(): StoredAuth | null {
   }
 }
 
-export function validateCredentials(username: string, password: string): boolean {
-  return (
-    username.trim().toLowerCase() === VALID_CREDENTIALS.username.toLowerCase() &&
-    password === VALID_CREDENTIALS.password
+function findUser(username: string, password: string) {
+  return VALID_USERS.find(
+    (u) => u.username.toLowerCase() === username.trim().toLowerCase() && u.password === password
   );
 }
 
+export function validateCredentials(username: string, password: string): boolean {
+  return !!findUser(username, password);
+}
+
 export function login(username: string, password: string): { success: boolean; error?: string } {
-  if (!validateCredentials(username, password)) {
+  const user = findUser(username, password);
+  if (!user) {
     return { success: false, error: "Invalid username or password" };
   }
 
   const token = generateToken();
   const auth: StoredAuth = {
-    username: username.trim(),
+    username: user.username,
     token,
     expiresAt: Date.now() + TOKEN_VALIDITY_MS,
+    role: user.role,
   };
 
   if (typeof window !== "undefined") {
@@ -90,11 +100,13 @@ export function useAuth(): AuthState & {
   login: (username: string, password: string) => { success: boolean; error?: string };
   logout: () => void;
   isLoading: boolean;
+  isOwner: boolean;
 } {
   const [state, setState] = useState<AuthState>({
     isAuthenticated: false,
     username: null,
     token: null,
+    role: null,
   });
   const [isLoading, setIsLoading] = useState(true);
 
@@ -104,20 +116,17 @@ export function useAuth(): AuthState & {
       isAuthenticated: !!stored,
       username: stored?.username ?? null,
       token: stored?.token ?? null,
+      role: stored?.role ?? null,
     });
-    setIsLoading(false);
   }, []);
 
+  // Initialize auth state on mount (client-side only)
   useEffect(() => {
-    // Read initial auth state
-    const stored = getStoredAuth();
-    setState({
-      isAuthenticated: !!stored,
-      username: stored?.username ?? null,
-      token: stored?.token ?? null,
-    });
+    refreshAuth();
     setIsLoading(false);
+  }, [refreshAuth]);
 
+  useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === AUTH_KEY) refreshAuth();
     };
@@ -149,5 +158,6 @@ export function useAuth(): AuthState & {
     login: doLogin,
     logout: doLogout,
     isLoading,
+    isOwner: state.role === "owner",
   };
 }

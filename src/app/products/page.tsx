@@ -17,7 +17,7 @@ import { computeDerivedPrices, formatMoney, formatQty } from "@/lib/pricing"
 import type { Availability } from "@/lib/domain"
 import { RefreshCcw, Search, X, SlidersHorizontal } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { useOwner } from "@/lib/owner"
+import { useAuthContext } from "@/components/auth-provider"
 
 type ProductRow = {
   id: string
@@ -46,7 +46,7 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 export default function ProductsPage() {
-  const owner = useOwner()
+  const auth = useAuthContext()
   const [items, setItems] = useState<ProductRow[]>([])
   const [brands, setBrands] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -286,8 +286,8 @@ export default function ProductsPage() {
           formatMoney={formatMoney}
           computeDerivedPrices={computeDerivedPrices}
           onRowClick={openItem}
-          canEditPrices={owner.isOwner}
-          ownerToken={owner.token}
+          canEditPrices={auth.isOwner}
+          ownerToken={auth.token}
           onDealerPriceSaved={handlePriceSaved}
           onError={(m) => setError(m)}
         />
@@ -302,8 +302,8 @@ export default function ProductsPage() {
         formatMoney={formatMoney}
         computeDerivedPrices={computeDerivedPrices}
         onPriceSaved={handlePriceSaved}
-        canEditPrices={owner.isOwner}
-        ownerToken={owner.token}
+        canEditPrices={auth.isOwner}
+        ownerToken={auth.token}
       />
     </div>
   )

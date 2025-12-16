@@ -36,7 +36,7 @@ export function StockBadge({
 }: {
   availability: Availability
   showIcon?: boolean
-  size?: "default" | "large"
+  size?: "default" | "large" | "small"
 }) {
   const config = CONFIG[availability]
   const Icon = config.icon
@@ -48,6 +48,17 @@ export function StockBadge({
         className={cn("font-medium gap-2 px-3 py-1.5 text-sm rounded-lg", config.className)}
       >
         <Icon className="h-4 w-4" />
+        {config.label}
+      </Badge>
+    )
+  }
+
+  if (size === "small") {
+    return (
+      <Badge
+        variant="outline"
+        className={cn("font-medium text-[10px] rounded px-1.5 py-0", config.className)}
+      >
         {config.label}
       </Badge>
     )

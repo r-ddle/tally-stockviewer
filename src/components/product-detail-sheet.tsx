@@ -6,10 +6,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { StockBadge, type Availability } from "@/components/stock-badge"
+import { StockBadge } from "@/components/stock-badge"
+import type { Availability } from "@/lib/domain"
 import { Copy, Save, Check, Calculator, Clock, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
+import { ownerHeaders } from "@/lib/owner"
 
 type ProductRow = {
   id: string
@@ -26,8 +28,6 @@ type ProductRow = {
 type DerivedPrices = {
   retailPrice: number | null
   darazPrice: number | null
-  customerPrice: number | null
-  institutionPrice: number | null
 }
 
 interface ProductDetailSheetProps {
@@ -38,6 +38,8 @@ interface ProductDetailSheetProps {
   formatMoney: (value: number | null) => string
   computeDerivedPrices: (dealerPrice: number | null) => DerivedPrices
   onPriceSaved: (id: string, newPrice: number | null) => void
+  canEditPrices: boolean
+  ownerToken: string | null
 }
 
 export function ProductDetailSheet({
@@ -48,6 +50,8 @@ export function ProductDetailSheet({
   formatMoney,
   computeDerivedPrices,
   onPriceSaved,
+  canEditPrices,
+  ownerToken,
 }: ProductDetailSheetProps) {
   const [dealerPriceInput, setDealerPriceInput] = useState<string>("")
   const [saving, setSaving] = useState(false)
@@ -65,15 +69,17 @@ export function ProductDetailSheet({
   }, [product])
 
   const saveDealerPrice = async () => {
+    if (!canEditPrices) return
     if (!product) return
     setSaving(true)
     setError(null)
     try {
-      const parsed = dealerPriceInput.trim() === "" ? null : Number.parseFloat(dealerPriceInput)
+      const cleaned = dealerPriceInput.replace(/,/g, "").trim()
+      const parsed = cleaned === "" ? null : Number.parseFloat(cleaned)
       const dealerPrice = parsed != null && Number.isFinite(parsed) ? parsed : null
       const res = await fetch(`/api/products/${product.id}/price`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...ownerHeaders(ownerToken) },
         body: JSON.stringify({ dealerPrice }),
       })
       const body = (await res.json()) as { ok: boolean; error?: string; dealerPrice?: number | null }
@@ -96,8 +102,6 @@ export function ProductDetailSheet({
       `Dealer: ${formatMoney(product.dealerPrice)}`,
       `Retail: ${formatMoney(d.retailPrice)}`,
       `Daraz: ${formatMoney(d.darazPrice)}`,
-      `Customer: ${formatMoney(d.customerPrice)}`,
-      `Institution: ${formatMoney(d.institutionPrice)}`,
     ]
     await navigator.clipboard.writeText(lines.join("\n"))
     setCopied(true)
@@ -129,7 +133,8 @@ export function ProductDetailSheet({
             <span className="text-2xl font-bold font-mono">{formatQty(product.stockQty, product.unit)}</span>
           </div>
 
-          {/* Dealer price editor */}
+          {/* Dealer price editor (owner only) */}
+          {canEditPrices ? (
           <Card className="border-2 md:border">
             <CardHeader className="pb-3">
               <CardTitle className="text-base md:text-sm font-semibold flex items-center gap-2">
@@ -140,7 +145,7 @@ export function ProductDetailSheet({
             <CardContent className="space-y-4 md:space-y-3">
               <div className="flex flex-col md:flex-row items-stretch md:items-center gap-3 md:gap-2">
                 <Input
-                  type="number"
+                  type="text"
                   inputMode="decimal"
                   placeholder="Enter dealer price..."
                   value={dealerPriceInput}
@@ -163,6 +168,7 @@ export function ProductDetailSheet({
               {error && <p className="text-base md:text-sm text-destructive font-medium">{error}</p>}
             </CardContent>
           </Card>
+          ) : null}
 
           {/* Price tabs */}
           <Tabs defaultValue="computed" className="w-full">
@@ -187,18 +193,6 @@ export function ProductDetailSheet({
                   label="Daraz"
                   formula="÷ 0.60"
                   value={formatMoney(derived?.darazPrice ?? null)}
-                  variant="default"
-                />
-                <MobilePriceCard
-                  label="Customer"
-                  formula="× 0.90"
-                  value={formatMoney(derived?.customerPrice ?? null)}
-                  variant="default"
-                />
-                <MobilePriceCard
-                  label="Institution"
-                  formula="× 0.85"
-                  value={formatMoney(derived?.institutionPrice ?? null)}
                   variant="default"
                 />
               </div>
@@ -235,7 +229,7 @@ export function ProductDetailSheet({
             <SheetTitle className="text-xl leading-tight pr-6">{product?.name ?? "Product"}</SheetTitle>
             <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
               {product?.brand && <span>{product.brand}</span>}
-              {product?.brand && <span>•</span>}
+              {product?.brand && <span>·</span>}
               <span>{product ? formatQty(product.stockQty, product.unit) : "—"}</span>
             </div>
           </SheetHeader>
@@ -250,7 +244,7 @@ export function ProductDetailSheet({
         <DrawerContent className="md:hidden max-h-[90vh]">
           <DrawerHeader className="pb-2">
             <DrawerTitle className="text-2xl leading-tight text-balance">{product?.name ?? "Product"}</DrawerTitle>
-            <p className="text-lg text-muted-foreground">{product?.brand ?? "No brand"}</p>
+            <p className="text-lg text-muted-foreground">{product?.brand ?? "—"}</p>
           </DrawerHeader>
           <div className="px-4 pb-8 overflow-y-auto">
             <DetailContent />

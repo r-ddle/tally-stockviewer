@@ -1,13 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import crypto from "node:crypto";
-import { sql } from "drizzle-orm";
-import { db } from "@/server/db/client";
-import { products } from "@/server/db/schema";
 import { availabilityFromQty, nameKeyFromName, normalizeWhitespace } from "@/server/parsers/common";
 import { parseTallyXlsx } from "@/server/parsers/xlsx";
 import { parseTallyXml } from "@/server/parsers/xml";
 import type { ParsedItem } from "@/server/parsers/types";
+import { db, dbCache } from "@/server/db";
 
 export type ImportSource = "auto" | "upload" | "sample";
 
@@ -74,31 +72,15 @@ export async function syncParsedItems(items: ParsedItem[]) {
     stockQty: it.qty,
     unit: it.unit ? normalizeWhitespace(it.unit) : null,
     availability: availabilityFromQty(it.qty),
-    lastSeenAt: new Date(now),
-    createdAt: new Date(now),
-    updatedAt: new Date(now),
+    lastSeenAt: now,
+    createdAt: now,
+    updatedAt: now,
   }));
 
-  const batchSize = 500;
-  for (let i = 0; i < normalized.length; i += batchSize) {
-    const batch = normalized.slice(i, i + batchSize);
-    if (batch.length === 0) continue;
-    db.insert(products)
-      .values(batch)
-      .onConflictDoUpdate({
-        target: products.nameKey,
-        set: {
-          name: sql`excluded.name`,
-          brand: sql`coalesce(excluded.brand, ${products.brand})`,
-          stockQty: sql`excluded.stock_qty`,
-          unit: sql`coalesce(excluded.unit, ${products.unit})`,
-          availability: sql`excluded.availability`,
-          lastSeenAt: sql`excluded.last_seen_at`,
-          updatedAt: sql`excluded.updated_at`,
-        },
-      })
-      .run();
+  const result = await db.upsertStock(normalized);
+  if (dbCache && dbCache.kind !== db.kind) {
+    await dbCache.upsertStock(normalized);
   }
 
-  return { upserted: normalized.length };
+  return { upserted: result.upserted };
 }

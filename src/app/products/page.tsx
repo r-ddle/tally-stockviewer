@@ -8,9 +8,11 @@ import { ProductDetailSheet } from "@/components/product-detail-sheet"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { computeDerivedPrices, formatMoney, formatQty } from "@/lib/pricing"
-import type { Availability } from "@/components/stock-badge"
+import type { Availability } from "@/lib/domain"
 import { RefreshCcw, ChevronDown, ChevronUp } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { useIsMobile } from "@/lib/use-is-mobile"
+import { useOwner } from "@/lib/owner"
 
 type ProductRow = {
   id: string
@@ -37,6 +39,8 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 export default function ProductsPage() {
+  const isMobile = useIsMobile()
+  const owner = useOwner()
   const [items, setItems] = useState<ProductRow[]>([])
   const [brands, setBrands] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
@@ -116,6 +120,8 @@ export default function ProductsPage() {
     setSelected((prev) => (prev?.id === id ? { ...prev, dealerPrice: newPrice } : prev))
   }
 
+  const canEditPrices = owner.isOwner && !isMobile
+
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 space-y-5 md:space-y-6">
       {/* Page header */}
@@ -138,7 +144,8 @@ export default function ProductsPage() {
       </div>
 
       {/* Collapsible import section - hidden by default on mobile */}
-      <Card className="hidden md:block">
+      {canEditPrices ? (
+        <Card className="hidden md:block">
         <button
           onClick={() => setImportExpanded(!importExpanded)}
           className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors rounded-t-lg"
@@ -160,7 +167,8 @@ export default function ProductsPage() {
             />
           </CardContent>
         )}
-      </Card>
+        </Card>
+      ) : null}
 
       {/* Error display */}
       {error && (
@@ -191,8 +199,8 @@ export default function ProductsPage() {
       </Card>
 
       {/* Data table */}
-      <Card className="border-2 md:border">
-        <CardContent className="p-4">
+      <div className="border-2 md:border rounded-2xl md:rounded-lg bg-card">
+        <div className="p-0 md:p-4">
           <ProductTable
             items={filtered}
             loading={loading}
@@ -200,9 +208,13 @@ export default function ProductsPage() {
             formatMoney={formatMoney}
             computeDerivedPrices={computeDerivedPrices}
             onRowClick={openItem}
+            canEditPrices={canEditPrices}
+            ownerToken={owner.token}
+            onDealerPriceSaved={handlePriceSaved}
+            onError={(m) => setError(m)}
           />
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
       {/* Product detail sheet */}
       <ProductDetailSheet
@@ -213,6 +225,8 @@ export default function ProductsPage() {
         formatMoney={formatMoney}
         computeDerivedPrices={computeDerivedPrices}
         onPriceSaved={handlePriceSaved}
+        canEditPrices={canEditPrices}
+        ownerToken={owner.token}
       />
     </main>
   )

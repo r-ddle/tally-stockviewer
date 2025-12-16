@@ -1,11 +1,12 @@
-import { eq } from "drizzle-orm";
-import { db } from "@/server/db/client";
-import { prices, products } from "@/server/db/schema";
+import { db, dbCache } from "@/server/db";
+import { assertOwner } from "@/server/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function PATCH(request: Request, context: { params: Promise<{ id: string }> }) {
+  const denied = assertOwner(request);
+  if (denied) return denied;
   const { id } = await context.params;
   const body = (await request.json().catch(() => null)) as { dealerPrice?: unknown } | null;
   const dealerPriceRaw = body?.dealerPrice;
@@ -18,17 +19,12 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
           ? Number.parseFloat(dealerPriceRaw)
           : null;
 
-  const product = db.select({ id: products.id }).from(products).where(eq(products.id, id)).get();
-  if (!product) return Response.json({ ok: false, error: "Not found." }, { status: 404 });
+  const result = await db.setDealerPrice(id, dealerPrice);
+  if (!result.ok) return Response.json({ ok: false, error: result.error }, { status: 404 });
 
-  const now = new Date();
-  db.insert(prices)
-    .values({ productId: id, dealerPrice, updatedAt: now })
-    .onConflictDoUpdate({
-      target: prices.productId,
-      set: { dealerPrice, updatedAt: now },
-    })
-    .run();
+  if (dbCache && dbCache.kind !== db.kind) {
+    await dbCache.setDealerPrice(id, dealerPrice);
+  }
 
   return Response.json({ ok: true, productId: id, dealerPrice });
 }

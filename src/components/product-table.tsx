@@ -1,10 +1,14 @@
 "use client"
 
-import { useState, useMemo } from "react"
+import { useEffect, useState } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
-import { StockBadge, type Availability } from "@/components/stock-badge"
-import { ChevronLeft, ChevronRight, Package, ChevronRightIcon } from "lucide-react"
+import { StockBadge } from "@/components/stock-badge"
+import type { Availability } from "@/lib/domain"
+import { ChevronLeft, ChevronRight, Package, Loader2, Pencil, X, Check } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { ownerHeaders } from "@/lib/owner"
+import { cn } from "@/lib/utils"
 
 type ProductRow = {
   id: string
@@ -13,14 +17,14 @@ type ProductRow = {
   stockQty: number | null
   unit: string | null
   availability: Availability
+  lastSeenAt: number | null
+  updatedAt: number
   dealerPrice: number | null
 }
 
 type DerivedPrices = {
   retailPrice: number | null
   darazPrice: number | null
-  customerPrice: number | null
-  institutionPrice: number | null
 }
 
 interface ProductTableProps {
@@ -30,10 +34,13 @@ interface ProductTableProps {
   formatMoney: (value: number | null) => string
   computeDerivedPrices: (dealerPrice: number | null) => DerivedPrices
   onRowClick: (item: ProductRow) => void
+  canEditPrices: boolean
+  ownerToken: string | null
+  onDealerPriceSaved: (id: string, newPrice: number | null) => void
+  onError?: (message: string) => void
 }
 
 const PAGE_SIZE = 50
-const MOBILE_PAGE_SIZE = 20
 
 export function ProductTable({
   items,
@@ -42,23 +49,57 @@ export function ProductTable({
   formatMoney,
   computeDerivedPrices,
   onRowClick,
+  canEditPrices,
+  ownerToken,
+  onDealerPriceSaved,
+  onError,
 }: ProductTableProps) {
   const [page, setPage] = useState(0)
-  const [isMobile, setIsMobile] = useState(false)
+  const [editingId, setEditingId] = useState<string | null>(null)
+  const [editingValue, setEditingValue] = useState<string>("")
+  const [savingId, setSavingId] = useState<string | null>(null)
 
-  useMemo(() => {
-    if (typeof window !== "undefined") {
-      setIsMobile(window.innerWidth < 768)
-    }
-  }, [])
-
-  useMemo(() => {
+  useEffect(() => {
     setPage(0)
   }, [items.length])
 
-  const pageSize = isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE
-  const totalPages = Math.ceil(items.length / pageSize)
-  const paginatedItems = items.slice(page * pageSize, (page + 1) * pageSize)
+  const totalPages = Math.ceil(items.length / PAGE_SIZE)
+  const paginatedItems = items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+
+  const beginEdit = (item: ProductRow) => {
+    if (!canEditPrices) return
+    setEditingId(item.id)
+    setEditingValue(item.dealerPrice == null || !Number.isFinite(item.dealerPrice) ? "" : String(item.dealerPrice))
+  }
+
+  const cancelEdit = () => {
+    setEditingId(null)
+    setEditingValue("")
+    setSavingId(null)
+  }
+
+  const saveEdit = async (id: string) => {
+    if (!canEditPrices) return
+    setSavingId(id)
+    try {
+      const cleaned = editingValue.replace(/,/g, "").trim()
+      const parsed = cleaned === "" ? null : Number.parseFloat(cleaned)
+      const dealerPrice = parsed != null && Number.isFinite(parsed) ? parsed : null
+      const res = await fetch(`/api/products/${id}/price`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json", ...ownerHeaders(ownerToken) },
+        body: JSON.stringify({ dealerPrice }),
+      })
+      const body = (await res.json()) as { ok: boolean; error?: string; dealerPrice?: number | null }
+      if (!body.ok) throw new Error(body.error ?? "Failed to save price.")
+      onDealerPriceSaved(id, body.dealerPrice ?? null)
+      cancelEdit()
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Failed to save price."
+      onError?.(message)
+      setSavingId(null)
+    }
+  }
 
   if (loading) {
     return (
@@ -85,40 +126,102 @@ export function ProductTable({
 
   return (
     <div className="space-y-4">
-      {/* Desktop Table */}
-      <div className="hidden md:block overflow-hidden rounded-lg border border-border">
-        <Table>
+      <div className="overflow-hidden rounded-lg border border-border">
+        <Table className="min-w-[980px] text-xs">
           <TableHeader>
             <TableRow className="bg-muted/50 hover:bg-muted/50">
-              <TableHead className="w-[28%] font-semibold">Product</TableHead>
-              <TableHead className="w-[12%] font-semibold">Brand</TableHead>
-              <TableHead className="w-[8%] text-right font-semibold">Qty</TableHead>
-              <TableHead className="w-[10%] font-semibold">Status</TableHead>
-              <TableHead className="w-[10%] text-right font-semibold">Dealer</TableHead>
-              <TableHead className="w-[10%] text-right font-semibold">Retail</TableHead>
-              <TableHead className="w-[10%] text-right font-semibold">Daraz</TableHead>
-              <TableHead className="w-[12%] text-right font-semibold">Customer</TableHead>
+              <TableHead className="sticky left-0 z-20 bg-muted/50 font-semibold border-r border-border/60">
+                Product
+              </TableHead>
+              <TableHead className="font-semibold">Brand</TableHead>
+              <TableHead className="text-right font-semibold">Qty</TableHead>
+              <TableHead className="font-semibold">Status</TableHead>
+              <TableHead className="text-right font-semibold">Dealer</TableHead>
+              <TableHead className="text-right font-semibold">Retail</TableHead>
+              <TableHead className="text-right font-semibold">Daraz</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {paginatedItems.map((item) => {
-              const derived = computeDerivedPrices(item.dealerPrice)
+              const isEditing = editingId === item.id
+              const cleaned = isEditing ? editingValue.replace(/,/g, "").trim() : ""
+              const editingParsed = isEditing && cleaned !== "" ? Number.parseFloat(cleaned) : item.dealerPrice
+              const derived = computeDerivedPrices(
+                isEditing && Number.isFinite(editingParsed as number) ? (editingParsed as number) : item.dealerPrice,
+              )
+
               return (
                 <TableRow
                   key={item.id}
                   onClick={() => onRowClick(item)}
-                  className="cursor-pointer transition-colors hover:bg-muted/50"
+                  className={cn("cursor-pointer transition-colors hover:bg-muted/50", isEditing && "bg-muted/30")}
                 >
-                  <TableCell className="font-medium">{item.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{item.brand ?? "—"}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{formatQty(item.stockQty, item.unit)}</TableCell>
+                  <TableCell className="sticky left-0 z-10 bg-card font-medium max-w-[420px] border-r border-border/60">
+                    <div className="truncate">{item.name}</div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground max-w-[220px]">
+                    <div className="truncate">{item.brand ?? "—"}</div>
+                  </TableCell>
+                  <TableCell className="text-right font-mono">{formatQty(item.stockQty, item.unit)}</TableCell>
                   <TableCell>
                     <StockBadge availability={item.availability} />
                   </TableCell>
-                  <TableCell className="text-right font-mono text-sm">{formatMoney(item.dealerPrice)}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{formatMoney(derived.retailPrice)}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{formatMoney(derived.darazPrice)}</TableCell>
-                  <TableCell className="text-right font-mono text-sm">{formatMoney(derived.customerPrice)}</TableCell>
+                  <TableCell
+                    className={cn("text-right font-mono", canEditPrices && "group")}
+                    onClick={(e) => {
+                      if (!canEditPrices) return
+                      e.stopPropagation()
+                      if (!isEditing) beginEdit(item)
+                    }}
+                  >
+                    {isEditing ? (
+                      <div className="flex items-center justify-end gap-1">
+                        <Input
+                          value={editingValue}
+                          onChange={(e) => setEditingValue(e.target.value)}
+                          inputMode="decimal"
+                          className="h-7 w-[120px] px-2 font-mono text-xs"
+                          onClick={(e) => e.stopPropagation()}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") void saveEdit(item.id)
+                            if (e.key === "Escape") cancelEdit()
+                          }}
+                        />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            void saveEdit(item.id)
+                          }}
+                          disabled={savingId === item.id}
+                        >
+                          {savingId === item.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-7 w-7"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            cancelEdit()
+                          }}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-end gap-2">
+                        <span>{formatMoney(item.dealerPrice)}</span>
+                        {canEditPrices ? (
+                          <Pencil className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-70" />
+                        ) : null}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right font-mono">{formatMoney(derived.retailPrice)}</TableCell>
+                  <TableCell className="text-right font-mono">{formatMoney(derived.darazPrice)}</TableCell>
                 </TableRow>
               )
             })}
@@ -126,59 +229,12 @@ export function ProductTable({
         </Table>
       </div>
 
-      <div className="md:hidden space-y-3">
-        {paginatedItems.map((item) => {
-          const derived = computeDerivedPrices(item.dealerPrice)
-          return (
-            <button
-              key={item.id}
-              onClick={() => onRowClick(item)}
-              className="w-full text-left rounded-2xl border-2 border-border bg-card p-5 active:bg-muted/50 active:scale-[0.99] transition-all shadow-sm"
-            >
-              {/* Header row */}
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1 min-w-0">
-                  <h3 className="text-lg font-semibold leading-tight text-balance">{item.name}</h3>
-                  <p className="text-base text-muted-foreground mt-1">{item.brand ?? "No brand"}</p>
-                </div>
-                <ChevronRightIcon className="h-6 w-6 text-muted-foreground shrink-0 mt-1" />
-              </div>
-
-              {/* Status and quantity row */}
-              <div className="flex items-center justify-between mt-4">
-                <StockBadge availability={item.availability} size="large" />
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground">Quantity</p>
-                  <p className="text-xl font-bold font-mono">{formatQty(item.stockQty, item.unit)}</p>
-                </div>
-              </div>
-
-              {/* Price grid */}
-              <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-border">
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">Dealer</p>
-                  <p className="text-lg font-bold font-mono text-primary">{formatMoney(item.dealerPrice)}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">Retail</p>
-                  <p className="text-lg font-bold font-mono">{formatMoney(derived.retailPrice)}</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground">Daraz</p>
-                  <p className="text-lg font-bold font-mono">{formatMoney(derived.darazPrice)}</p>
-                </div>
-              </div>
-            </button>
-          )
-        })}
-      </div>
-
       {totalPages > 1 && (
         <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-t border-border pt-4">
           <p className="text-base md:text-sm text-muted-foreground order-2 md:order-1">
             Showing{" "}
             <span className="font-semibold text-foreground">
-              {page * pageSize + 1}–{Math.min((page + 1) * pageSize, items.length)}
+              {page * PAGE_SIZE + 1}-{Math.min((page + 1) * PAGE_SIZE, items.length)}
             </span>{" "}
             of <span className="font-semibold text-foreground">{items.length.toLocaleString("en-IN")}</span>
           </p>

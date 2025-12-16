@@ -1,8 +1,7 @@
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
 import { CheckCircle2, XCircle, AlertTriangle, HelpCircle } from "lucide-react"
-
-export type Availability = "IN_STOCK" | "OUT_OF_STOCK" | "NEGATIVE" | "UNKNOWN"
+import type { Availability } from "@/lib/domain"
 
 const CONFIG: Record<
   Availability,

@@ -7,6 +7,8 @@ import { Button } from "@/components/ui/button"
 import Link from "next/link"
 import { ArrowRight, Package, CheckCircle2, XCircle, AlertTriangle, Clock, FileText } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
+import { useIsMobile } from "@/lib/use-is-mobile"
+import { ownerHeaders, useOwner } from "@/lib/owner"
 
 type Summary = {
   total: number
@@ -21,12 +23,14 @@ type DefaultInfo =
   | { path: string; exists: true; ext: string; mtimeMs: number; size: number }
   | { path: string; exists: false; error?: string }
 
-async function getJson<T>(url: string): Promise<T> {
-  const res = await fetch(url, { cache: "no-store" })
+async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(url, { cache: "no-store", ...init })
   return (await res.json()) as T
 }
 
 export default function Home() {
+  const isMobile = useIsMobile()
+  const owner = useOwner()
   const [summary, setSummary] = useState<Summary | null>(null)
   const [defaultInfo, setDefaultInfo] = useState<DefaultInfo | null>(null)
   const [status, setStatus] = useState<string | null>(null)
@@ -46,7 +50,7 @@ export default function Home() {
     if (!info.mtimeMs || info.mtimeMs <= prev) return
 
     setStatus("Auto-loading latest export…")
-    const res = await fetch("/api/import/auto", { method: "POST" })
+    const res = await fetch("/api/import/auto", { method: "POST", headers: ownerHeaders(owner.token) })
     const body = (await res.json()) as { ok: boolean; error?: string; fileMtimeMs?: number }
     if (!body.ok) {
       setStatus(body.error ?? "Auto-load failed.")
@@ -59,7 +63,7 @@ export default function Home() {
       setLastAutoLoad(new Date(now).toLocaleString())
     }
     setStatus(null)
-  }, [])
+  }, [owner.token])
 
   useEffect(() => {
     ;(async () => {
@@ -68,16 +72,22 @@ export default function Home() {
       const ms = v ? Number(v) : 0
       if (ms) setLastAutoLoad(new Date(ms).toLocaleString())
 
-      const info = await getJson<DefaultInfo>("/api/import/default-info")
-      setDefaultInfo(info)
-      await maybeAutoLoad(info)
+      if (!isMobile && owner.isOwner) {
+        const info = await getJson<DefaultInfo>("/api/import/default-info", {
+          headers: ownerHeaders(owner.token),
+        })
+        setDefaultInfo(info)
+        await maybeAutoLoad(info)
+      } else {
+        setDefaultInfo(null)
+      }
       await refresh()
       setLoading(false)
     })().catch((e) => {
       setStatus(e instanceof Error ? e.message : "Failed to load dashboard.")
       setLoading(false)
     })
-  }, [maybeAutoLoad, refresh])
+  }, [isMobile, maybeAutoLoad, owner.isOwner, owner.token, refresh])
 
   return (
     <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 md:py-6 space-y-6 md:space-y-8">
@@ -125,11 +135,18 @@ export default function Home() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <ImportControls
-            onImported={() => {
-              refresh().catch(() => {})
-            }}
-          />
+          {!isMobile && owner.isOwner ? (
+            <ImportControls
+              onImported={() => {
+                refresh().catch(() => {})
+              }}
+            />
+          ) : (
+            <div className="text-base md:text-sm text-muted-foreground">
+              {isMobile ? "Mobile is read-only." : "Viewer mode is read-only."} Open this app on the owner desktop to
+              import the daily export and update stock.
+            </div>
+          )}
 
           {/* Status message */}
           {status && (
@@ -168,10 +185,10 @@ export default function Home() {
               <span className="font-medium">Default path:</span> {defaultInfo.path}{" "}
               {defaultInfo.exists ? (
                 <span className="text-success">
-                  • {defaultInfo.ext} • {new Date(defaultInfo.mtimeMs).toLocaleString()}
+                  · {defaultInfo.ext} · {new Date(defaultInfo.mtimeMs).toLocaleString()}
                 </span>
               ) : (
-                <span className="text-destructive">• Not found</span>
+                <span className="text-destructive">Not found</span>
               )}
             </div>
           )}

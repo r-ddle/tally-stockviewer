@@ -1,9 +1,12 @@
 import { importFromUpload } from "@/server/importer";
+import { assertOwner } from "@/server/auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
+  const denied = assertOwner(request);
+  if (denied) return denied;
   try {
     const form = await request.formData();
     const file = form.get("file");
@@ -23,4 +26,3 @@ export async function POST(request: Request) {
     );
   }
 }
-

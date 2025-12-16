@@ -11,15 +11,19 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Upload, FileText, RefreshCcw, ChevronDown, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ownerHeaders, useOwner } from "@/lib/owner"
 
 type ImportResult =
   | { ok: true; parsedCount: number; upserted: number; fileMtimeMs?: number }
   | { ok: false; error: string }
 
-async function postJson<T>(url: string, body?: unknown): Promise<T> {
+async function postJson<T>(url: string, token: string | null, body?: unknown): Promise<T> {
   const res = await fetch(url, {
     method: "POST",
-    headers: body ? { "Content-Type": "application/json" } : undefined,
+    headers: {
+      ...(body ? { "Content-Type": "application/json" } : {}),
+      ...ownerHeaders(token),
+    },
     body: body ? JSON.stringify(body) : undefined,
   })
   return (await res.json()) as T
@@ -35,12 +39,13 @@ export function ImportControls({
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [busy, setBusy] = useState<null | "auto" | "upload" | "sample">(null)
   const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
+  const { token } = useOwner()
 
   const doAuto = async () => {
     setBusy("auto")
     setMessage(null)
     try {
-      const result = await postJson<ImportResult & { fileMtimeMs?: number }>("/api/import/auto")
+      const result = await postJson<ImportResult & { fileMtimeMs?: number }>("/api/import/auto", token)
       if (result.ok && typeof result.fileMtimeMs === "number") {
         localStorage.setItem("tally:lastDefaultMtimeMs", String(result.fileMtimeMs))
         localStorage.setItem("tally:lastAutoLoadAt", String(Date.now()))
@@ -63,7 +68,7 @@ export function ImportControls({
     setBusy("sample")
     setMessage(null)
     try {
-      const result = await postJson<ImportResult>("/api/import/sample")
+      const result = await postJson<ImportResult>("/api/import/sample", token)
       onImported?.(result)
       setMessage({
         text: result.ok ? `Imported ${result.parsedCount.toLocaleString("en-IN")} sample products` : result.error,
@@ -82,7 +87,7 @@ export function ImportControls({
     setBusy("sample")
     setMessage(null)
     try {
-      const result = await postJson<ImportResult>("/api/import/fixture-xlsx")
+      const result = await postJson<ImportResult>("/api/import/fixture-xlsx", token)
       onImported?.(result)
       setMessage({
         text: result.ok ? `Imported ${result.parsedCount.toLocaleString("en-IN")} sample products` : result.error,
@@ -103,7 +108,7 @@ export function ImportControls({
     try {
       const form = new FormData()
       form.set("file", file)
-      const res = await fetch("/api/import/upload", { method: "POST", body: form })
+      const res = await fetch("/api/import/upload", { method: "POST", body: form, headers: ownerHeaders(token) })
       const result = (await res.json()) as ImportResult
       onImported?.(result)
       setMessage({

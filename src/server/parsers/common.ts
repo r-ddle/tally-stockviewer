@@ -1,4 +1,4 @@
-import type { Availability } from "@/server/db/schema";
+import type { Availability } from "@/lib/domain";
 
 const PRODUCT_MARKERS = [
   "size",
@@ -86,4 +86,3 @@ export function shouldIgnoreRowName(name: string): boolean {
   if (!trimmed) return true;
   return /^(grand\s+total|total|sub\s*total|subtotal)\b/i.test(trimmed);
 }
-

@@ -1,15 +1,8 @@
-import { and, asc, desc, eq, isNull, like, sql, type SQL } from "drizzle-orm";
-import { db } from "@/server/db/client";
-import { prices, products } from "@/server/db/schema";
+import type { Availability } from "@/lib/domain";
+import { db } from "@/server/db";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-type Availability = "IN_STOCK" | "OUT_OF_STOCK" | "NEGATIVE" | "UNKNOWN";
-const AVAILABILITY: Availability[] = ["IN_STOCK", "OUT_OF_STOCK", "NEGATIVE", "UNKNOWN"];
-function isAvailability(value: string): value is Availability {
-  return (AVAILABILITY as string[]).includes(value);
-}
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
@@ -20,50 +13,22 @@ export async function GET(request: Request) {
   const dir = (url.searchParams.get("dir") ?? "asc").trim();
   const limit = Math.min(Number(url.searchParams.get("limit") ?? 5000), 20000);
 
-  const filters: SQL[] = [];
-  if (search) {
-    const q = `%${search.toLowerCase()}%`;
-    filters.push(like(sql`lower(${products.name})`, q));
-  }
-  if (brand) {
-    if (brand === "__unknown__") filters.push(isNull(products.brand));
-    else filters.push(eq(products.brand, brand));
-  }
-  if (availability && isAvailability(availability)) {
-    filters.push(eq(products.availability, availability));
-  }
+  const availabilityValue =
+    availability === "IN_STOCK" || availability === "OUT_OF_STOCK" || availability === "NEGATIVE" || availability === "UNKNOWN"
+      ? (availability as Availability)
+      : undefined;
 
-  const order =
-    sort === "qty"
-      ? products.stockQty
-      : sort === "availability"
-        ? products.availability
-        : products.name;
+  const sortValue = sort === "qty" || sort === "availability" ? (sort as "qty" | "availability") : "name";
+  const dirValue = dir === "desc" ? "desc" : "asc";
 
-  const rows = db
-    .select({
-      id: products.id,
-      name: products.name,
-      brand: products.brand,
-      stockQty: products.stockQty,
-      unit: products.unit,
-      availability: products.availability,
-      lastSeenAt: products.lastSeenAt,
-      updatedAt: products.updatedAt,
-      dealerPrice: prices.dealerPrice,
-    })
-    .from(products)
-    .leftJoin(prices, eq(prices.productId, products.id))
-    .where(filters.length ? and(...filters) : undefined)
-    .orderBy(dir === "desc" ? desc(order) : asc(order))
-    .limit(Number.isFinite(limit) ? limit : 5000)
-    .all();
-
-  return Response.json({
-    items: rows.map((r) => ({
-      ...r,
-      lastSeenAt: r.lastSeenAt ? r.lastSeenAt.getTime() : null,
-      updatedAt: r.updatedAt.getTime(),
-    })),
+  const items = await db.listProducts({
+    search: search || undefined,
+    brand: brand || undefined,
+    availability: availabilityValue,
+    sort: sortValue,
+    dir: dirValue,
+    limit,
   });
+
+  return Response.json({ items });
 }

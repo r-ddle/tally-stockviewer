@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
 import { Search, X, SlidersHorizontal, ArrowUpDown, Filter } from "lucide-react"
-import type { Availability } from "@/components/stock-badge"
+import type { Availability } from "@/lib/domain"
 import { cn } from "@/lib/utils"
 import {
   Drawer,

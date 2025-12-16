@@ -3,10 +3,16 @@
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { cn } from "@/lib/utils"
-import { Package, LayoutDashboard, Database } from "lucide-react"
+import { Package, LayoutDashboard, Database, Shield } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { useOwner } from "@/lib/owner"
 
 export function AppHeader() {
   const pathname = usePathname()
+  const owner = useOwner()
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-lg">
@@ -22,8 +28,9 @@ export function AppHeader() {
           </div>
         </Link>
 
-        {/* Navigation */}
-        <nav className="flex items-center gap-1">
+        {/* Navigation + mode */}
+        <div className="flex items-center gap-3">
+          <nav className="flex items-center gap-1">
           <Link
             href="/"
             className={cn(
@@ -48,7 +55,41 @@ export function AppHeader() {
             <Package className="h-4 w-4" />
             <span className="hidden sm:inline">Products</span>
           </Link>
-        </nav>
+          </nav>
+
+          <Sheet>
+            <SheetTrigger asChild>
+              <Button variant="outline" className="gap-2 bg-transparent">
+                <Shield className="h-4 w-4" />
+                {owner.isOwner ? "Owner" : "Viewer"}
+              </Button>
+            </SheetTrigger>
+            <SheetContent className="w-[420px] sm:w-[460px]">
+              <SheetHeader>
+                <SheetTitle>Access Mode</SheetTitle>
+              </SheetHeader>
+              <div className="mt-6 space-y-4">
+                <div className="text-sm text-muted-foreground">
+                  Viewer mode is read-only. Owner mode enables imports and price edits.
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="owner-token">Owner token</Label>
+                  <Input
+                    id="owner-token"
+                    placeholder="Enter owner token…"
+                    value={owner.token ?? ""}
+                    onChange={(e) => owner.setToken(e.target.value)}
+                  />
+                  <div className="flex items-center gap-2">
+                    <Button type="button" variant="secondary" onClick={() => owner.clear()}>
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </SheetContent>
+          </Sheet>
+        </div>
       </div>
 
       <div className="md:hidden flex items-center justify-center h-14 px-4">

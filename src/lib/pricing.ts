@@ -1,22 +1,16 @@
 export function computeDerivedPrices(dealerPrice: number | null): {
   retailPrice: number | null;
   darazPrice: number | null;
-  customerPrice: number | null;
-  institutionPrice: number | null;
 } {
   if (dealerPrice == null || !Number.isFinite(dealerPrice)) {
     return {
       retailPrice: null,
       darazPrice: null,
-      customerPrice: null,
-      institutionPrice: null,
     };
   }
   const retailPrice = dealerPrice / 0.75;
   const darazPrice = dealerPrice / 0.6;
-  const customerPrice = retailPrice * 0.9;
-  const institutionPrice = retailPrice * 0.85;
-  return { retailPrice, darazPrice, customerPrice, institutionPrice };
+  return { retailPrice, darazPrice };
 }
 
 export function formatMoney(value: number | null): string {

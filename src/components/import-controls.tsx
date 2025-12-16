@@ -125,14 +125,13 @@ export function ImportControls({
 
   return (
     <div className="space-y-3">
-      <div className={cn("flex flex-wrap items-center gap-2", compact && "flex-col sm:flex-row")}>
-        {/* Primary action */}
+      {/* Desktop layout */}
+      <div className={cn("hidden md:flex flex-wrap items-center gap-2", compact && "flex-col sm:flex-row")}>
         <Button onClick={doAuto} disabled={disabled} className="gap-2">
           {busy === "auto" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
           {compact ? "Sync" : "Load Latest Export"}
         </Button>
 
-        {/* Upload button */}
         <input
           ref={fileInputRef}
           type="file"
@@ -151,7 +150,6 @@ export function ImportControls({
           Upload File
         </Button>
 
-        {/* Sample data dropdown */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" disabled={disabled} className="gap-2 bg-transparent">
@@ -174,20 +172,56 @@ export function ImportControls({
         </DropdownMenu>
       </div>
 
-      {/* Status message */}
+      <div className="md:hidden flex flex-col gap-3">
+        <Button
+          onClick={doAuto}
+          disabled={disabled}
+          size="lg"
+          className="h-16 text-lg font-semibold rounded-2xl gap-3 shadow-lg active:scale-[0.98] transition-transform"
+        >
+          {busy === "auto" ? <Loader2 className="h-6 w-6 animate-spin" /> : <RefreshCcw className="h-6 w-6" />}
+          Load Latest Data
+        </Button>
+
+        <div className="grid grid-cols-2 gap-3">
+          <Button
+            variant="secondary"
+            disabled={disabled}
+            onClick={() => fileInputRef.current?.click()}
+            size="lg"
+            className="h-14 text-base font-semibold rounded-2xl gap-2 active:scale-[0.98] transition-transform"
+          >
+            {busy === "upload" ? <Loader2 className="h-5 w-5 animate-spin" /> : <Upload className="h-5 w-5" />}
+            Upload
+          </Button>
+
+          <Button
+            variant="outline"
+            disabled={disabled}
+            onClick={doSample}
+            size="lg"
+            className="h-14 text-base font-semibold rounded-2xl gap-2 bg-transparent active:scale-[0.98] transition-transform"
+          >
+            {busy === "sample" ? <Loader2 className="h-5 w-5 animate-spin" /> : <FileText className="h-5 w-5" />}
+            Sample
+          </Button>
+        </div>
+      </div>
+
+      {/* Status message - enhanced for mobile */}
       {message && (
         <div
           className={cn(
-            "flex items-center gap-2 text-sm rounded-lg px-3 py-2",
+            "flex items-center gap-3 text-sm rounded-2xl px-4 py-3 md:rounded-lg md:px-3 md:py-2",
             message.success ? "bg-success/10 text-success" : "bg-destructive/10 text-destructive",
           )}
         >
           {message.success ? (
-            <CheckCircle2 className="h-4 w-4 shrink-0" />
+            <CheckCircle2 className="h-5 w-5 md:h-4 md:w-4 shrink-0" />
           ) : (
-            <AlertCircle className="h-4 w-4 shrink-0" />
+            <AlertCircle className="h-5 w-5 md:h-4 md:w-4 shrink-0" />
           )}
-          {message.text}
+          <span className="text-base md:text-sm font-medium">{message.text}</span>
         </div>
       )}
     </div>

@@ -117,23 +117,28 @@ export default function ProductsPage() {
   }
 
   return (
-    <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 space-y-6">
+    <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 space-y-5 md:space-y-6">
       {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">Products</h1>
-          <p className="text-sm text-muted-foreground">
-            Dealer prices are stored locally and never overwritten by imports.
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div className="space-y-2 md:space-y-1">
+          <h1 className="text-3xl md:text-2xl font-bold tracking-tight">Products</h1>
+          <p className="text-base md:text-sm text-muted-foreground">
+            Dealer prices are stored locally and never overwritten.
           </p>
         </div>
-        <Button variant="outline" onClick={() => refresh()} disabled={loading} className="gap-2 shrink-0">
-          <RefreshCcw className={cn("h-4 w-4", loading && "animate-spin")} />
+        <Button
+          variant="outline"
+          onClick={() => refresh()}
+          disabled={loading}
+          className="h-14 md:h-10 text-base md:text-sm font-semibold rounded-2xl md:rounded-md gap-2 bg-transparent shrink-0 active:scale-[0.98] transition-transform"
+        >
+          <RefreshCcw className={cn("h-5 w-5 md:h-4 md:w-4", loading && "animate-spin")} />
           Refresh
         </Button>
       </div>
 
-      {/* Collapsible import section */}
-      <Card>
+      {/* Collapsible import section - hidden by default on mobile */}
+      <Card className="hidden md:block">
         <button
           onClick={() => setImportExpanded(!importExpanded)}
           className="w-full flex items-center justify-between p-4 text-left hover:bg-muted/50 transition-colors rounded-t-lg"
@@ -159,13 +164,13 @@ export default function ProductsPage() {
 
       {/* Error display */}
       {error && (
-        <div className="rounded-lg bg-destructive/10 border border-destructive/30 px-4 py-3 text-sm text-destructive">
+        <div className="rounded-2xl md:rounded-lg bg-destructive/10 border-2 md:border border-destructive/30 px-5 md:px-4 py-4 md:py-3 text-base md:text-sm text-destructive font-medium">
           {error}
         </div>
       )}
 
       {/* Filters toolbar */}
-      <Card>
+      <Card className="border-2 md:border">
         <CardContent className="p-4">
           <DataTableToolbar
             search={search}
@@ -186,7 +191,7 @@ export default function ProductsPage() {
       </Card>
 
       {/* Data table */}
-      <Card>
+      <Card className="border-2 md:border">
         <CardContent className="p-4">
           <ProductTable
             items={filtered}

@@ -80,15 +80,16 @@ export default function Home() {
   }, [maybeAutoLoad, refresh])
 
   return (
-    <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 space-y-8">
+    <main className="mx-auto max-w-7xl px-4 sm:px-6 py-6 md:py-6 space-y-6 md:space-y-8">
       {/* Page header */}
-      <div className="space-y-1">
-        <h1 className="text-2xl font-bold tracking-tight">Dashboard</h1>
-        <p className="text-muted-foreground">Import your daily Tally "Godown Summary" and manage product prices.</p>
+      <div className="space-y-2 md:space-y-1">
+        <h1 className="text-3xl md:text-2xl font-bold tracking-tight">Dashboard</h1>
+        <p className="text-lg md:text-base text-muted-foreground">
+          View up-to-date Tally product stock and prices at a glance.
+        </p>
       </div>
 
-      {/* Stats grid */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2 grid-cols-1 lg:grid-cols-4">
         <StatCard
           title="Total Products"
           value={loading ? "—" : (summary?.total ?? 0)}
@@ -116,10 +117,10 @@ export default function Home() {
       </div>
 
       {/* Import section */}
-      <Card>
+      <Card className="border-2 md:border">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5 text-muted-foreground" />
+          <CardTitle className="flex items-center gap-2 text-xl md:text-base">
+            <FileText className="h-6 w-6 md:h-5 md:w-5 text-muted-foreground" />
             Import Data
           </CardTitle>
         </CardHeader>
@@ -134,30 +135,36 @@ export default function Home() {
           {status && (
             <p
               className={
-                status.toLowerCase().includes("fail") ? "text-sm text-destructive" : "text-sm text-muted-foreground"
+                status.toLowerCase().includes("fail")
+                  ? "text-base md:text-sm text-destructive font-medium"
+                  : "text-base md:text-sm text-muted-foreground"
               }
             >
               {status}
             </p>
           )}
 
-          {/* Metadata */}
-          <div className="flex flex-wrap items-center gap-x-6 gap-y-2 text-sm border-t border-border pt-4">
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              <span>Last import:</span>
-              <span className="font-medium text-foreground">{lastImport}</span>
+          {/* Metadata - simplified on mobile */}
+          <div className="flex flex-col md:flex-row md:flex-wrap items-start md:items-center gap-3 md:gap-x-6 md:gap-y-2 text-base md:text-sm border-t border-border pt-4">
+            <div className="flex items-center gap-2 text-muted-foreground w-full md:w-auto justify-between md:justify-start">
+              <span className="flex items-center gap-2">
+                <Clock className="h-5 w-5 md:h-4 md:w-4" />
+                Last import:
+              </span>
+              <span className="font-semibold text-foreground">{lastImport}</span>
             </div>
-            <div className="flex items-center gap-2 text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              <span>Auto-load:</span>
-              <span className="font-medium text-foreground">{lastAutoLoad}</span>
+            <div className="flex items-center gap-2 text-muted-foreground w-full md:w-auto justify-between md:justify-start">
+              <span className="flex items-center gap-2">
+                <Clock className="h-5 w-5 md:h-4 md:w-4" />
+                Auto-load:
+              </span>
+              <span className="font-semibold text-foreground">{lastAutoLoad}</span>
             </div>
           </div>
 
-          {/* Default path info */}
+          {/* Default path info - hidden on mobile for simplicity */}
           {defaultInfo && (
-            <div className="text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
+            <div className="hidden md:block text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2">
               <span className="font-medium">Default path:</span> {defaultInfo.path}{" "}
               {defaultInfo.exists ? (
                 <span className="text-success">
@@ -171,20 +178,23 @@ export default function Home() {
         </CardContent>
       </Card>
 
-      {/* Quick action */}
-      <Card className="bg-gradient-to-r from-primary/5 to-primary/10 border-primary/20">
-        <CardContent className="p-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <h3 className="font-semibold">Browse Products</h3>
-              <p className="text-sm text-muted-foreground">
+      <Card className="border-2 border-primary/20">
+        <CardContent className="p-6 md:p-6">
+          <div className="flex flex-col gap-4">
+            <div className="space-y-2 md:space-y-1">
+              <h3 className="text-xl md:text-base font-semibold">Browse Products</h3>
+              <p className="text-base md:text-sm text-muted-foreground">
                 Search, filter, and manage dealer prices for all your products.
               </p>
             </div>
-            <Button asChild className="gap-2 shrink-0">
+            <Button
+              asChild
+              size="lg"
+              className="h-16 md:h-10 text-lg md:text-sm font-semibold rounded-2xl md:rounded-md gap-3 shadow-lg active:scale-[0.98] transition-transform w-full md:w-auto md:self-start"
+            >
               <Link href="/products">
                 Open Products
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-6 w-6 md:h-4 md:w-4" />
               </Link>
             </Button>
           </div>

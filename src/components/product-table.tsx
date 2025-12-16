@@ -4,7 +4,7 @@ import { useState, useMemo } from "react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { StockBadge, type Availability } from "@/components/stock-badge"
-import { ChevronLeft, ChevronRight, Package } from "lucide-react"
+import { ChevronLeft, ChevronRight, Package, ChevronRightIcon } from "lucide-react"
 
 type ProductRow = {
   id: string
@@ -33,6 +33,7 @@ interface ProductTableProps {
 }
 
 const PAGE_SIZE = 50
+const MOBILE_PAGE_SIZE = 20
 
 export function ProductTable({
   items,
@@ -43,32 +44,41 @@ export function ProductTable({
   onRowClick,
 }: ProductTableProps) {
   const [page, setPage] = useState(0)
+  const [isMobile, setIsMobile] = useState(false)
 
-  // Reset page when items change
+  useMemo(() => {
+    if (typeof window !== "undefined") {
+      setIsMobile(window.innerWidth < 768)
+    }
+  }, [])
+
   useMemo(() => {
     setPage(0)
   }, [items.length])
 
-  const totalPages = Math.ceil(items.length / PAGE_SIZE)
-  const paginatedItems = items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
+  const pageSize = isMobile ? MOBILE_PAGE_SIZE : PAGE_SIZE
+  const totalPages = Math.ceil(items.length / pageSize)
+  const paginatedItems = items.slice(page * pageSize, (page + 1) * pageSize)
 
   if (loading) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-muted-foreground">
-        <div className="h-8 w-8 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-        <p className="mt-4 text-sm">Loading products...</p>
+      <div className="flex flex-col items-center justify-center py-16 md:py-16 text-muted-foreground">
+        <div className="h-12 w-12 md:h-8 md:w-8 animate-spin rounded-full border-4 md:border-2 border-primary border-t-transparent" />
+        <p className="mt-4 text-lg md:text-sm font-medium">Loading products...</p>
       </div>
     )
   }
 
   if (items.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center py-16 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
-          <Package className="h-8 w-8 text-muted-foreground" />
+      <div className="flex flex-col items-center justify-center py-16 text-center px-4">
+        <div className="flex h-20 w-20 md:h-16 md:w-16 items-center justify-center rounded-full bg-muted">
+          <Package className="h-10 w-10 md:h-8 md:w-8 text-muted-foreground" />
         </div>
-        <h3 className="mt-4 text-sm font-medium">No products found</h3>
-        <p className="mt-1 text-sm text-muted-foreground">Try adjusting your filters or import some data.</p>
+        <h3 className="mt-4 text-lg md:text-sm font-semibold">No products found</h3>
+        <p className="mt-2 text-base md:text-sm text-muted-foreground">
+          Try adjusting your filters or import some data.
+        </p>
       </div>
     )
   }
@@ -116,74 +126,83 @@ export function ProductTable({
         </Table>
       </div>
 
-      {/* Mobile Cards */}
       <div className="md:hidden space-y-3">
         {paginatedItems.map((item) => {
           const derived = computeDerivedPrices(item.dealerPrice)
           return (
-            <div
+            <button
               key={item.id}
               onClick={() => onRowClick(item)}
-              className="rounded-lg border border-border bg-card p-4 cursor-pointer active:bg-muted/50 transition-colors"
+              className="w-full text-left rounded-2xl border-2 border-border bg-card p-5 active:bg-muted/50 active:scale-[0.99] transition-all shadow-sm"
             >
+              {/* Header row */}
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1 min-w-0">
-                  <h3 className="font-medium truncate">{item.name}</h3>
-                  <p className="text-sm text-muted-foreground">{item.brand ?? "No brand"}</p>
+                  <h3 className="text-lg font-semibold leading-tight text-balance">{item.name}</h3>
+                  <p className="text-base text-muted-foreground mt-1">{item.brand ?? "No brand"}</p>
                 </div>
-                <StockBadge availability={item.availability} />
+                <ChevronRightIcon className="h-6 w-6 text-muted-foreground shrink-0 mt-1" />
               </div>
-              <div className="mt-3 grid grid-cols-2 gap-3 text-sm">
-                <div>
-                  <span className="text-muted-foreground">Qty:</span>{" "}
-                  <span className="font-mono">{formatQty(item.stockQty, item.unit)}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Dealer:</span>{" "}
-                  <span className="font-mono">{formatMoney(item.dealerPrice)}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Retail:</span>{" "}
-                  <span className="font-mono">{formatMoney(derived.retailPrice)}</span>
-                </div>
-                <div>
-                  <span className="text-muted-foreground">Daraz:</span>{" "}
-                  <span className="font-mono">{formatMoney(derived.darazPrice)}</span>
+
+              {/* Status and quantity row */}
+              <div className="flex items-center justify-between mt-4">
+                <StockBadge availability={item.availability} size="large" />
+                <div className="text-right">
+                  <p className="text-sm text-muted-foreground">Quantity</p>
+                  <p className="text-xl font-bold font-mono">{formatQty(item.stockQty, item.unit)}</p>
                 </div>
               </div>
-            </div>
+
+              {/* Price grid */}
+              <div className="grid grid-cols-3 gap-3 mt-4 pt-4 border-t border-border">
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">Dealer</p>
+                  <p className="text-lg font-bold font-mono text-primary">{formatMoney(item.dealerPrice)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">Retail</p>
+                  <p className="text-lg font-bold font-mono">{formatMoney(derived.retailPrice)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground">Daraz</p>
+                  <p className="text-lg font-bold font-mono">{formatMoney(derived.darazPrice)}</p>
+                </div>
+              </div>
+            </button>
           )
         })}
       </div>
 
-      {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between border-t border-border pt-4">
-          <p className="text-sm text-muted-foreground">
-            Showing {page * PAGE_SIZE + 1}–{Math.min((page + 1) * PAGE_SIZE, items.length)} of{" "}
-            {items.length.toLocaleString("en-IN")}
+        <div className="flex flex-col md:flex-row items-center justify-between gap-4 border-t border-border pt-4">
+          <p className="text-base md:text-sm text-muted-foreground order-2 md:order-1">
+            Showing{" "}
+            <span className="font-semibold text-foreground">
+              {page * pageSize + 1}–{Math.min((page + 1) * pageSize, items.length)}
+            </span>{" "}
+            of <span className="font-semibold text-foreground">{items.length.toLocaleString("en-IN")}</span>
           </p>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3 order-1 md:order-2 w-full md:w-auto">
             <Button
               variant="outline"
-              size="sm"
               onClick={() => setPage((p) => Math.max(0, p - 1))}
               disabled={page === 0}
+              className="flex-1 md:flex-none h-14 md:h-9 text-base md:text-sm font-semibold rounded-2xl md:rounded-md gap-2 bg-transparent active:scale-[0.98] transition-transform"
             >
-              <ChevronLeft className="h-4 w-4" />
-              <span className="hidden sm:inline ml-1">Previous</span>
+              <ChevronLeft className="h-5 w-5 md:h-4 md:w-4" />
+              Previous
             </Button>
-            <span className="text-sm text-muted-foreground px-2">
-              Page {page + 1} of {totalPages}
+            <span className="text-base md:text-sm text-muted-foreground px-2 whitespace-nowrap">
+              <span className="font-semibold text-foreground">{page + 1}</span> / {totalPages}
             </span>
             <Button
               variant="outline"
-              size="sm"
               onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
               disabled={page >= totalPages - 1}
+              className="flex-1 md:flex-none h-14 md:h-9 text-base md:text-sm font-semibold rounded-2xl md:rounded-md gap-2 bg-transparent active:scale-[0.98] transition-transform"
             >
-              <span className="hidden sm:inline mr-1">Next</span>
-              <ChevronRight className="h-4 w-4" />
+              Next
+              <ChevronRight className="h-5 w-5 md:h-4 md:w-4" />
             </Button>
           </div>
         </div>

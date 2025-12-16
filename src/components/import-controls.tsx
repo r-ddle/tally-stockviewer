@@ -37,7 +37,7 @@ export function ImportControls({
   compact?: boolean
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [busy, setBusy] = useState<null | "auto" | "upload" | "sample">(null)
+  const [busy, setBusy] = useState<null | "auto" | "upload" | "sample" | "migrate">(null)
   const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
   const { token } = useOwner()
 
@@ -126,6 +126,31 @@ export function ImportControls({
     }
   }
 
+  const doMigrate = async () => {
+    setBusy("migrate")
+    setMessage(null)
+    try {
+      const result = await postJson<
+        | { ok: true; productsCopied: number; pricesCopied: number; sqlitePath: string }
+        | { ok: false; error: string }
+      >("/api/admin/migrate-sqlite", token)
+
+      setMessage({
+        text: result.ok
+          ? `Migrated ${result.productsCopied.toLocaleString("en-IN")} products and ${result.pricesCopied.toLocaleString("en-IN")} prices to Neon`
+          : result.error,
+        success: result.ok,
+      })
+      if (result.ok) onImported?.({ ok: true, parsedCount: result.productsCopied, upserted: result.productsCopied })
+    } catch (e) {
+      const err = e instanceof Error ? e.message : "Migration failed."
+      setMessage({ text: err, success: false })
+      onImported?.({ ok: false, error: err })
+    } finally {
+      setBusy(null)
+    }
+  }
+
   const disabled = busy !== null
 
   return (
@@ -158,7 +183,11 @@ export function ImportControls({
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" disabled={disabled} className="gap-2 bg-transparent">
-              {busy === "sample" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              {busy === "sample" || busy === "migrate" ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <FileText className="h-4 w-4" />
+              )}
               <span className="hidden sm:inline">Sample Data</span>
               <ChevronDown className="h-3 w-3 opacity-50" />
             </Button>
@@ -173,6 +202,15 @@ export function ImportControls({
               <FileText className="mr-2 h-4 w-4" />
               Load Sample XLSX
             </DropdownMenuItem>
+            {token ? (
+              <>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={doMigrate}>
+                  <RefreshCcw className="mr-2 h-4 w-4" />
+                  Migrate Local SQLite → Neon
+                </DropdownMenuItem>
+              </>
+            ) : null}
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

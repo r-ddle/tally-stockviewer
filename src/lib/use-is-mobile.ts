@@ -1,17 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useLayoutEffect, useState } from "react";
+
+function computeIsMobile() {
+  if (typeof window === "undefined") return false;
+  return window.innerWidth < 768;
+}
 
 export function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(false);
+  const [isMobile, setIsMobile] = useState(computeIsMobile);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     const update = () => {
-      const coarse =
-        typeof window !== "undefined" &&
-        window.matchMedia?.("(pointer: coarse)")?.matches;
-      const narrow = typeof window !== "undefined" && window.innerWidth < 768;
-      setIsMobile(Boolean(coarse || narrow));
+      setIsMobile(computeIsMobile());
     };
     update();
     window.addEventListener("resize", update);
@@ -20,4 +21,3 @@ export function useIsMobile() {
 
   return isMobile;
 }
-

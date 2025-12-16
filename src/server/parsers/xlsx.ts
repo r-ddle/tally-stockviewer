@@ -19,6 +19,8 @@ const QTY_HEADERS = [
   "cl. qty",
   "cl qty",
 ];
+const RATE_HEADERS = ["rate"];
+const VALUE_HEADERS = ["value", "amount"];
 const UNIT_HEADERS = ["unit", "uom"];
 
 function normalizeCell(value: unknown): string {
@@ -59,10 +61,27 @@ function qtySampleScore(rows: unknown[][], dataStartRow: number, qtyCol: number)
   return score;
 }
 
-function findHeader(rows: unknown[][]): { headerStartRow: number; headerEndRow: number; nameCol: number; qtyCol: number; unitCol: number | null } | null {
+function findHeader(rows: unknown[][]): {
+  headerStartRow: number;
+  headerEndRow: number;
+  nameCol: number;
+  qtyCol: number;
+  rateCol: number | null;
+  valueCol: number | null;
+  unitCol: number | null;
+} | null {
   const limit = Math.min(rows.length, 120);
   let best:
-    | { score: number; headerStartRow: number; headerEndRow: number; nameCol: number; qtyCol: number; unitCol: number | null }
+    | {
+        score: number;
+        headerStartRow: number;
+        headerEndRow: number;
+        nameCol: number;
+        qtyCol: number;
+        rateCol: number | null;
+        valueCol: number | null;
+        unitCol: number | null;
+      }
     | null = null;
 
   for (let headerStartRow = 0; headerStartRow < limit; headerStartRow += 1) {
@@ -87,6 +106,10 @@ function findHeader(rows: unknown[][]): { headerStartRow: number; headerEndRow: 
 
       const unitColRaw = cells.findIndex((c) => headerMatch(c, UNIT_HEADERS));
       const unitCol = unitColRaw >= 0 ? unitColRaw : null;
+      const rateColRaw = cells.findIndex((c) => headerMatch(c, RATE_HEADERS));
+      const rateCol = rateColRaw >= 0 ? rateColRaw : null;
+      const valueColRaw = cells.findIndex((c) => headerMatch(c, VALUE_HEADERS));
+      const valueCol = valueColRaw >= 0 ? valueColRaw : null;
 
       for (const qtyCol of qtyCandidates) {
         const hdr = combinedHeader(rows, headerStartRow, headerEndRow, qtyCol);
@@ -104,7 +127,7 @@ function findHeader(rows: unknown[][]): { headerStartRow: number; headerEndRow: 
         score += Math.min(sample, 50); // prefer columns that look like quantities
 
         if (!best || score > best.score) {
-          best = { score, headerStartRow, headerEndRow, nameCol, qtyCol, unitCol };
+          best = { score, headerStartRow, headerEndRow, nameCol, qtyCol, rateCol, valueCol, unitCol };
         }
       }
     }
@@ -116,6 +139,8 @@ function findHeader(rows: unknown[][]): { headerStartRow: number; headerEndRow: 
         headerEndRow: best.headerEndRow,
         nameCol: best.nameCol,
         qtyCol: best.qtyCol,
+        rateCol: best.rateCol,
+        valueCol: best.valueCol,
         unitCol: best.unitCol,
       }
     : null;
@@ -132,7 +157,9 @@ export function parseTallyXlsx(buffer: Buffer): ParsedItem[] {
 
     const rows = XLSX.utils.sheet_to_json(sheet, {
       header: 1,
-      raw: true,
+      // Use formatted text so Tally-style quantities like `56 nos` are preserved even when stored
+      // as numeric cells with a display format (raw numbers would lose the unit).
+      raw: false,
       defval: "",
       blankrows: true,
     }) as unknown[][];
@@ -162,6 +189,8 @@ export function parseTallyXlsx(buffer: Buffer): ParsedItem[] {
 
       const qtyCell = row[header.qtyCol];
       const unitCell = header.unitCol != null ? row[header.unitCol] : null;
+      const rateCell = header.rateCol != null ? row[header.rateCol] : null;
+      const valueCell = header.valueCol != null ? row[header.valueCol] : null;
 
       let qty: number | null = null;
       let unit: string | null = null;
@@ -179,6 +208,11 @@ export function parseTallyXlsx(buffer: Buffer): ParsedItem[] {
         if (qty != null && typeof unitCell === "string") unit = normalizeWhitespace(unitCell) || null;
       }
 
+      const rate = parseMaybeNumber(rateCell);
+      const value = parseMaybeNumber(valueCell);
+
+      // Newer Tally exports often include brand total rows with totals in Qty/Rate/Value.
+      // Treat a short "group" row as the brand header when the following row looks like a product.
       if (looksLikeBrandHeader(name)) {
         let nextName: string | null = null;
         for (let look = r + 1; look < Math.min(rows.length, r + 5); look += 1) {
@@ -194,6 +228,33 @@ export function parseTallyXlsx(buffer: Buffer): ParsedItem[] {
           }
         }
         if (nextName && !looksLikeBrandHeader(nextName)) {
+          currentBrand = name;
+          continue;
+        }
+      }
+
+      if (!looksLikeBrandHeader(name) && rate != null && value != null) {
+        // Fallback: some brand names include product-like words; use totals + lookahead.
+        let nextName: string | null = null;
+        for (let look = r + 1; look < Math.min(rows.length, r + 5); look += 1) {
+          const nextRow = rows[look] ?? [];
+          const nextRaw = nextRow[header.nameCol];
+          const candidate =
+            typeof nextRaw === "string"
+              ? normalizeWhitespace(nextRaw)
+              : normalizeWhitespace(String(nextRaw ?? ""));
+          if (candidate) {
+            nextName = candidate;
+            break;
+          }
+        }
+        if (
+          nextName &&
+          name.length <= 35 &&
+          !/\d/.test(name) &&
+          !shouldIgnoreRowName(name) &&
+          !looksLikeBrandHeader(nextName)
+        ) {
           currentBrand = name;
           continue;
         }

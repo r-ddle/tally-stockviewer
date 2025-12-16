@@ -23,6 +23,12 @@ type DefaultInfo =
   | { path: string; exists: true; ext: string; mtimeMs: number; size: number }
   | { path: string; exists: false; error?: string }
 
+function errorFromBody(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null
+  const error = (body as Record<string, unknown>).error
+  return typeof error === "string" && error.trim() ? error : null
+}
+
 async function getJson<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, { cache: "no-store", ...init })
   return (await res.json()) as T
@@ -73,11 +79,17 @@ export default function Home() {
       if (ms) setLastAutoLoad(new Date(ms).toLocaleString())
 
       if (!isMobile && owner.isOwner) {
-        const info = await getJson<DefaultInfo>("/api/import/default-info", {
-          headers: ownerHeaders(owner.token),
-        })
-        setDefaultInfo(info)
-        await maybeAutoLoad(info)
+        const res = await fetch("/api/import/default-info", { cache: "no-store", headers: ownerHeaders(owner.token) })
+        const body = (await res.json().catch(() => null)) as unknown
+        if (!res.ok) {
+          setDefaultInfo(null)
+          if (res.status === 403) setStatus("Owner token invalid (viewer mode).")
+          else setStatus(errorFromBody(body) ?? "Failed to check default export path.")
+        } else {
+          const info = body as DefaultInfo
+          setDefaultInfo(info)
+          await maybeAutoLoad(info)
+        }
       } else {
         setDefaultInfo(null)
       }

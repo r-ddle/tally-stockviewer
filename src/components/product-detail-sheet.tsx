@@ -249,7 +249,7 @@ export function ProductDetailSheet({
                 <span>{product ? formatQty(product.stockQty, product.unit) : "—"}</span>
               </div>
             </SheetHeader>
-            <div className="mt-6">
+            <div className="px-4 pb-6 pt-2">
               {DetailContent()}
             </div>
           </SheetContent>

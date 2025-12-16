@@ -1,4 +1,4 @@
-import { db, dbCache } from "@/server/db";
+import { db } from "@/server/db";
 import { assertOwner } from "@/server/auth";
 
 export const runtime = "nodejs";
@@ -21,10 +21,6 @@ export async function PATCH(request: Request, context: { params: Promise<{ id: s
 
   const result = await db.setDealerPrice(id, dealerPrice);
   if (!result.ok) return Response.json({ ok: false, error: result.error }, { status: 404 });
-
-  if (dbCache && dbCache.kind !== db.kind) {
-    await dbCache.setDealerPrice(id, dealerPrice);
-  }
 
   return Response.json({ ok: true, productId: id, dealerPrice });
 }

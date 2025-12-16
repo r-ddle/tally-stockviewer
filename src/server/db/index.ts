@@ -1,31 +1,37 @@
-import { applyEnvDefaults } from "@/lib/env";
 import type { DbProvider } from "./types";
 import { createNeonProvider } from "./neon";
-import { createSqliteProvider } from "./sqlite";
-
-applyEnvDefaults();
 
 declare global {
   var __dbProvider: DbProvider | undefined;
-  var __dbCache: DbProvider | undefined;
+  var __dbProviderUrl: string | undefined;
 }
 
 function isPostgresUrl(url: string) {
   return url.startsWith("postgres://") || url.startsWith("postgresql://");
 }
 
-export const db: DbProvider = global.__dbProvider ?? (() => {
-  const url = process.env.DATABASE_URL!;
-  return isPostgresUrl(url) ? createNeonProvider(url) : createSqliteProvider(url);
-})();
+export const db: DbProvider = (() => {
+  const url = process.env.DATABASE_URL?.trim();
+  if (!url) {
+    throw new Error("DATABASE_URL is required and must point to Neon Postgres.");
+  }
+  if (!isPostgresUrl(url)) {
+    throw new Error("Only Postgres DATABASE_URL values are supported (Neon is the primary database).");
+  }
 
-export const dbCache: DbProvider | null = (() => {
-  const url = process.env.SQLITE_CACHE_URL?.trim();
-  if (!url) return null;
-  return global.__dbCache ?? createSqliteProvider(url);
-})();
+  if (
+    process.env.NODE_ENV !== "production" &&
+    global.__dbProvider &&
+    global.__dbProvider.kind === "neon" &&
+    global.__dbProviderUrl === url
+  ) {
+    return global.__dbProvider;
+  }
 
-if (process.env.NODE_ENV !== "production") {
-  global.__dbProvider = db;
-  if (dbCache) global.__dbCache = dbCache;
-}
+  const provider = createNeonProvider(url);
+  if (process.env.NODE_ENV !== "production") {
+    global.__dbProvider = provider;
+    global.__dbProviderUrl = url;
+  }
+  return provider;
+})();

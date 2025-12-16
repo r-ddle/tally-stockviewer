@@ -8,11 +8,44 @@ import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { useOwner } from "@/lib/owner"
+import { ownerHeaders, useOwner } from "@/lib/owner"
+import { useEffect, useState } from "react"
 
 export function AppHeader() {
   const pathname = usePathname()
   const owner = useOwner()
+  const [serverMode, setServerMode] = useState<"owner" | "viewer" | null>(null)
+  const [serverConfigured, setServerConfigured] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch("/api/auth/mode", { cache: "no-store", headers: ownerHeaders(owner.token) })
+        type ModeResponse =
+          | { ok: true; mode: "owner" | "viewer"; configured: boolean }
+          | { ok: false; error?: string }
+        const body = (await res.json().catch(() => null)) as ModeResponse | null
+        if (cancelled) return
+        if (body?.ok) {
+          setServerMode(body.mode)
+          setServerConfigured(body.configured)
+        } else {
+          setServerMode(null)
+          setServerConfigured(null)
+        }
+      } catch {
+        if (cancelled) return
+        setServerMode(null)
+        setServerConfigured(null)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [owner.token])
+
+  const effectiveMode = serverMode ?? (owner.isOwner ? "owner" : "viewer")
 
   return (
     <header className="sticky top-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-lg">
@@ -61,7 +94,7 @@ export function AppHeader() {
             <SheetTrigger asChild>
               <Button variant="outline" className="gap-2 bg-transparent">
                 <Shield className="h-4 w-4" />
-                {owner.isOwner ? "Owner" : "Viewer"}
+                {effectiveMode === "owner" ? "Owner" : "Viewer"}
               </Button>
             </SheetTrigger>
             <SheetContent className="w-[420px] sm:w-[460px]">
@@ -72,6 +105,13 @@ export function AppHeader() {
                 <div className="text-sm text-muted-foreground">
                   Viewer mode is read-only. Owner mode enables imports and price edits.
                 </div>
+                <div className="text-sm">
+                  <span className="text-muted-foreground">Server mode:</span>{" "}
+                  <span className="font-semibold">{effectiveMode === "owner" ? "Owner" : "Viewer"}</span>
+                  {serverConfigured === false ? (
+                    <span className="ml-2 text-muted-foreground">(OWNER_TOKEN not set)</span>
+                  ) : null}
+                </div>
                 <div className="space-y-2">
                   <Label htmlFor="owner-token">Owner token</Label>
                   <Input
@@ -80,6 +120,11 @@ export function AppHeader() {
                     value={owner.token ?? ""}
                     onChange={(e) => owner.setToken(e.target.value)}
                   />
+                  {serverMode === "viewer" && owner.token ? (
+                    <div className="text-sm text-destructive">
+                      Token doesn't match the server. Check `OWNER_TOKEN` in `.env` and restart `npm run dev`.
+                    </div>
+                  ) : null}
                   <div className="flex items-center gap-2">
                     <Button type="button" variant="secondary" onClick={() => owner.clear()}>
                       Clear

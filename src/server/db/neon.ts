@@ -14,7 +14,8 @@ export function createNeonProvider(databaseUrl: string): DbProvider {
   const ensureSchema = async () => {
     if (!ensured) {
       ensured = (async () => {
-        await sql.query(`
+        await sql.query(
+          `
           CREATE TABLE IF NOT EXISTS products (
             id TEXT PRIMARY KEY,
             name TEXT NOT NULL,
@@ -26,20 +27,23 @@ export function createNeonProvider(databaseUrl: string): DbProvider {
             last_seen_at BIGINT NULL,
             created_at BIGINT NOT NULL,
             updated_at BIGINT NOT NULL
-          );
+          )
+        `,
+        );
+        await sql.query(`CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand)`);
+        await sql.query(`CREATE INDEX IF NOT EXISTS idx_products_availability ON products(availability)`);
+        await sql.query(`CREATE INDEX IF NOT EXISTS idx_products_last_seen_at ON products(last_seen_at)`);
 
-          CREATE INDEX IF NOT EXISTS idx_products_brand ON products(brand);
-          CREATE INDEX IF NOT EXISTS idx_products_availability ON products(availability);
-          CREATE INDEX IF NOT EXISTS idx_products_last_seen_at ON products(last_seen_at);
-
+        await sql.query(
+          `
           CREATE TABLE IF NOT EXISTS prices (
             product_id TEXT PRIMARY KEY REFERENCES products(id) ON DELETE CASCADE,
             dealer_price DOUBLE PRECISION NULL,
             updated_at BIGINT NOT NULL
-          );
-
-          CREATE INDEX IF NOT EXISTS idx_prices_product_id ON prices(product_id);
-        `);
+          )
+        `,
+        );
+        await sql.query(`CREATE INDEX IF NOT EXISTS idx_prices_product_id ON prices(product_id)`);
       })();
     }
     await ensured;

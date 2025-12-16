@@ -5,7 +5,7 @@ import { availabilityFromQty, nameKeyFromName, normalizeWhitespace } from "@/ser
 import { parseTallyXlsx } from "@/server/parsers/xlsx";
 import { parseTallyXml } from "@/server/parsers/xml";
 import type { ParsedItem } from "@/server/parsers/types";
-import { db, dbCache } from "@/server/db";
+import { db } from "@/server/db";
 
 export type ImportSource = "auto" | "upload" | "sample";
 
@@ -78,9 +78,6 @@ export async function syncParsedItems(items: ParsedItem[]) {
   }));
 
   const result = await db.upsertStock(normalized);
-  if (dbCache && dbCache.kind !== db.kind) {
-    await dbCache.upsertStock(normalized);
-  }
 
   return { upserted: result.upserted };
 }

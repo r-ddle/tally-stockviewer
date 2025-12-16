@@ -12,6 +12,7 @@ import { Copy, Save, Check, Calculator, Clock, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 import { ownerHeaders } from "@/lib/owner"
+import { useIsMobile } from "@/lib/use-is-mobile"
 
 type ProductRow = {
   id: string
@@ -53,20 +54,23 @@ export function ProductDetailSheet({
   canEditPrices,
   ownerToken,
 }: ProductDetailSheetProps) {
+  const isMobile = useIsMobile()
   const [dealerPriceInput, setDealerPriceInput] = useState<string>("")
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const productId = product?.id ?? null
+  const productDealerPrice = product?.dealerPrice ?? null
 
   useEffect(() => {
-    if (product) {
+    if (productId) {
       setDealerPriceInput(
-        product.dealerPrice == null || !Number.isFinite(product.dealerPrice) ? "" : String(product.dealerPrice),
+        productDealerPrice == null || !Number.isFinite(productDealerPrice) ? "" : String(productDealerPrice),
       )
       setCopied(false)
       setError(null)
     }
-  }, [product])
+  }, [productDealerPrice, productId])
 
   const saveDealerPrice = async () => {
     if (!canEditPrices) return
@@ -222,35 +226,35 @@ export function ProductDetailSheet({
 
   return (
     <>
-      {/* Desktop Sheet */}
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent className="hidden md:flex w-full sm:max-w-lg overflow-y-auto flex-col">
-          <SheetHeader className="space-y-1">
-            <SheetTitle className="text-xl leading-tight pr-6">{product?.name ?? "Product"}</SheetTitle>
-            <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
-              {product?.brand && <span>{product.brand}</span>}
-              {product?.brand && <span>·</span>}
-              <span>{product ? formatQty(product.stockQty, product.unit) : "—"}</span>
+      {isMobile ? (
+        <Drawer open={open} onOpenChange={onOpenChange}>
+          <DrawerContent className="max-h-[90vh]">
+            <DrawerHeader className="pb-2">
+              <DrawerTitle className="text-2xl leading-tight text-balance">{product?.name ?? "Product"}</DrawerTitle>
+              <p className="text-lg text-muted-foreground">{product?.brand ?? "—"}</p>
+            </DrawerHeader>
+            <div className="px-4 pb-8 pb-[env(safe-area-inset-bottom)] overflow-y-auto">
+              {DetailContent()}
             </div>
-          </SheetHeader>
-          <div className="mt-6">
-            <DetailContent />
-          </div>
-        </SheetContent>
-      </Sheet>
-
-      {/* Mobile Drawer */}
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="md:hidden max-h-[90vh]">
-          <DrawerHeader className="pb-2">
-            <DrawerTitle className="text-2xl leading-tight text-balance">{product?.name ?? "Product"}</DrawerTitle>
-            <p className="text-lg text-muted-foreground">{product?.brand ?? "—"}</p>
-          </DrawerHeader>
-          <div className="px-4 pb-8 overflow-y-auto">
-            <DetailContent />
-          </div>
-        </DrawerContent>
-      </Drawer>
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <Sheet open={open} onOpenChange={onOpenChange}>
+          <SheetContent className="w-full sm:max-w-lg overflow-y-auto flex-col">
+            <SheetHeader className="space-y-1">
+              <SheetTitle className="text-xl leading-tight pr-6">{product?.name ?? "Product"}</SheetTitle>
+              <div className="flex flex-wrap items-center gap-2 text-sm text-muted-foreground">
+                {product?.brand && <span>{product.brand}</span>}
+                {product?.brand && <span>·</span>}
+                <span>{product ? formatQty(product.stockQty, product.unit) : "—"}</span>
+              </div>
+            </SheetHeader>
+            <div className="mt-6">
+              {DetailContent()}
+            </div>
+          </SheetContent>
+        </Sheet>
+      )}
     </>
   )
 }

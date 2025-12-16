@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useMemo } from "react"
+import { useEffect, useState, useMemo, useRef } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -58,6 +58,7 @@ export function ProductDetailSheet({
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const inputRef = useRef<HTMLInputElement | null>(null)
   const productId = product?.id ?? null
   const productDealerPrice = product?.dealerPrice ?? null
 
@@ -68,6 +69,8 @@ export function ProductDetailSheet({
       )
       setCopied(false)
       setError(null)
+      // Keep focus on the price input when dialog opens so typing doesn't lose focus
+      requestAnimationFrame(() => inputRef.current?.focus())
     }
   }, [productDealerPrice, productId])
 
@@ -175,6 +178,8 @@ export function ProductDetailSheet({
                   type="text"
                   inputMode="decimal"
                   placeholder="Enter price..."
+                  ref={inputRef}
+                  autoFocus
                   value={dealerPriceInput}
                   onChange={(e) => setDealerPriceInput(e.target.value)}
                   className="h-10 rounded-lg tabular-nums"
@@ -231,7 +236,20 @@ export function ProductDetailSheet({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
+      <DialogContent
+        className="sm:max-w-md"
+        // Stop Radix from taking focus away from the input on open
+        onOpenAutoFocus={(e) => {
+          e.preventDefault()
+          requestAnimationFrame(() => inputRef.current?.focus())
+        }}
+        // If focus ever shifts to the dialog container, push it back to the input
+        onFocusCapture={(e) => {
+          if (e.target === e.currentTarget) {
+            requestAnimationFrame(() => inputRef.current?.focus())
+          }
+        }}
+      >
         <DialogHeader>
           <DialogTitle className="text-lg leading-tight pr-6">{product?.name ?? "Product"}</DialogTitle>
           <DialogDescription>{product?.brand ?? "—"}</DialogDescription>

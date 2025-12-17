@@ -15,7 +15,7 @@ import {
 } from "@/components/ui/select"
 import { computeDerivedPrices, formatMoney, formatQty } from "@/lib/pricing"
 import type { Availability } from "@/lib/domain"
-import { RefreshCcw, Search, X, SlidersHorizontal } from "lucide-react"
+import { RefreshCcw, Search, X, SlidersHorizontal, Download } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthContext } from "@/components/auth-provider"
 
@@ -60,6 +60,7 @@ export default function ProductsPage() {
 
   const [selected, setSelected] = useState<ProductRow | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
+  const [exporting, setExporting] = useState(false)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -132,6 +133,31 @@ export default function ProductsPage() {
     setAvailability("all")
   }
 
+  const exportXlsx = useCallback(async () => {
+    setExporting(true)
+    try {
+      const res = await fetch("/api/export/products", { method: "GET" })
+      if (!res.ok) throw new Error("Failed to export products.")
+      const blob = await res.blob()
+      const cd = res.headers.get("Content-Disposition") || ""
+      let filename = "products.xlsx"
+      const m = /filename\s*=\s*"?([^";]+)"?/i.exec(cd)
+      if (m && m[1]) filename = m[1]
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = filename
+      document.body.appendChild(a)
+      a.click()
+      a.remove()
+      URL.revokeObjectURL(url)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Export failed.")
+    } finally {
+      setExporting(false)
+    }
+  }, [])
+
   return (
     <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 md:py-12">
       {/* Header */}
@@ -145,15 +171,27 @@ export default function ProductsPage() {
             {filtered.length !== items.length && ` of ${items.length.toLocaleString("en-IN")}`} products
           </p>
         </div>
-        <Button
-          variant="outline"
-          onClick={refresh}
-          disabled={loading}
-          className="gap-2 h-10 rounded-xl shrink-0"
-        >
-          <RefreshCcw className={cn("h-4 w-4", loading && "animate-spin")} />
-          Refresh
-        </Button>
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={exportXlsx}
+            disabled={exporting}
+            className="gap-2 h-10 rounded-xl shrink-0"
+            title="Export all brands to Excel (one sheet per brand)"
+          >
+            <Download className={cn("h-4 w-4", exporting && "animate-pulse")} />
+            {exporting ? "Exporting…" : "Export XLSX"}
+          </Button>
+          <Button
+            variant="outline"
+            onClick={refresh}
+            disabled={loading}
+            className="gap-2 h-10 rounded-xl shrink-0"
+          >
+            <RefreshCcw className={cn("h-4 w-4", loading && "animate-spin")} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
       {/* Error state */}

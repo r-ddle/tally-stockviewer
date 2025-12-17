@@ -75,7 +75,7 @@ export function RecentChangesPanel({ limit = 20 }: { limit?: number }) {
   const grouped = useMemo(() => items.slice(0, limit), [items, limit])
 
   return (
-    <Card className="border-border bg-card">
+    <Card className="border-border bg-card overflow-auto">
       <div className="flex items-center justify-between px-4 py-3">
         <div>
           <h3 className="text-sm font-semibold text-foreground">Recent Changes</h3>

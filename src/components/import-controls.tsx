@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dropdown-menu"
 import { Upload, FileText, RefreshCcw, ChevronDown, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { ownerHeaders, useOwner } from "@/lib/owner"
+import { ownerHeaders } from "@/lib/owner"
 
 type ImportResult =
   | { ok: true; parsedCount: number; upserted: number; fileMtimeMs?: number }
@@ -32,14 +32,16 @@ async function postJson<T>(url: string, token: string | null, body?: unknown): P
 export function ImportControls({
   onImported,
   compact = false,
+  ownerToken,
 }: {
   onImported?: (result: ImportResult) => void
   compact?: boolean
+  ownerToken: string | null
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [busy, setBusy] = useState<null | "auto" | "upload" | "sample" | "migrate">(null)
   const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
-  const { token } = useOwner()
+  const token = ownerToken
 
   const doAuto = async () => {
     setBusy("auto")

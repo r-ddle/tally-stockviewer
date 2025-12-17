@@ -155,7 +155,7 @@ export default function Home() {
               Load stock data from Tally exports or upload files.
             </p>
           </div>
-          <ImportControls onImported={() => refresh()} />
+          <ImportControls onImported={() => refresh()} ownerToken={auth.token} />
         </div>
       )}
     </div>

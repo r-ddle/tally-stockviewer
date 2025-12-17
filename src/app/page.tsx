@@ -7,6 +7,7 @@ import { useCallback, useEffect, useState } from "react"
 import { cn } from "@/lib/utils"
 import { useAuthContext } from "@/components/auth-provider"
 import { ImportControls } from "@/components/import-controls"
+import { RecentChangesPanel } from "@/components/recent-changes"
 
 type Summary = {
   total: number
@@ -136,6 +137,11 @@ export default function Home() {
             </Link>
           </Button>
         </div>
+      </div>
+
+      {/* Recent changes */}
+      <div className="mt-6 md:mt-8">
+        <RecentChangesPanel limit={15} />
       </div>
 
       {/* Import controls for owner only */}

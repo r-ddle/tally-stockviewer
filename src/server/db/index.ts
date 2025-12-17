@@ -24,7 +24,8 @@ export const db: DbProvider = (() => {
     global.__dbProvider &&
     global.__dbProvider.kind === "neon" &&
     global.__dbProviderUrl === url &&
-    typeof (global.__dbProvider as any).deleteProductsByNameKeys === "function"
+    typeof (global.__dbProvider as any).deleteProductsByNameKeys === "function" &&
+    typeof (global.__dbProvider as any).listChanges === "function"
   ) {
     return global.__dbProvider;
   }

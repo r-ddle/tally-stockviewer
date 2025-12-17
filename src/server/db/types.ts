@@ -43,6 +43,30 @@ export type UpsertStockItem = {
   updatedAt: number;
 };
 
+export type ProductChangeType = "NEW_PRODUCT" | "STOCK_DROP" | "OUT_OF_STOCK" | "PRICE_CHANGE";
+
+export type ProductChange = {
+  id: string;
+  productId: string;
+  name: string;
+  brand: string | null;
+  changeType: ProductChangeType;
+  fromQty: number | null;
+  toQty: number | null;
+  fromAvailability: Availability | null;
+  toAvailability: Availability | null;
+  fromPrice: number | null;
+  toPrice: number | null;
+  createdAt: number;
+};
+
+export type ListChangesParams = {
+  limit?: number;
+  changeTypes?: ProductChangeType[];
+  since?: number;
+  productId?: string;
+};
+
 export type DbProvider = {
   kind: "neon" | "sqlite";
   getSummary(): Promise<Summary>;
@@ -51,4 +75,5 @@ export type DbProvider = {
   upsertStock(items: UpsertStockItem[]): Promise<{ upserted: number }>;
   deleteProductsByNameKeys(nameKeys: string[]): Promise<{ deleted: number }>;
   setDealerPrice(productId: string, dealerPrice: number | null): Promise<{ ok: true } | { ok: false; error: string }>;
+  listChanges(params: ListChangesParams): Promise<ProductChange[]>;
 };

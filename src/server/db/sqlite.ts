@@ -2,7 +2,15 @@ import Database from "better-sqlite3";
 import fs from "node:fs";
 import path from "node:path";
 import type { Availability } from "@/lib/domain";
-import type { DbProvider, ListProductsParams, ProductRow, Summary, UpsertStockItem } from "./types";
+import type {
+  DbProvider,
+  ListChangesParams,
+  ListProductsParams,
+  ProductChange,
+  ProductRow,
+  Summary,
+  UpsertStockItem,
+} from "./types";
 
 function resolveDbPath(databaseUrl: string): string {
   const trimmed = databaseUrl.trim();
@@ -211,6 +219,11 @@ export function createSqliteProvider(databaseUrl: string): DbProvider {
         .run(productId, dealerPrice, now);
 
       return { ok: true as const };
+    },
+
+    async listChanges(_params: ListChangesParams): Promise<ProductChange[]> {
+      // SQLite provider is only used for admin migration; change feed not required here.
+      return [];
     },
   };
 }

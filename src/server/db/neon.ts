@@ -1,6 +1,16 @@
 import { neon } from "@neondatabase/serverless";
+import crypto from "node:crypto";
 import type { Availability } from "@/lib/domain";
-import type { DbProvider, ListProductsParams, ProductRow, Summary, UpsertStockItem } from "./types";
+import type {
+  DbProvider,
+  ListProductsParams,
+  ListChangesParams,
+  ProductChange,
+  ProductChangeType,
+  ProductRow,
+  Summary,
+  UpsertStockItem,
+} from "./types";
 
 function parseAvailability(value: unknown): Availability {
   if (value === "IN_STOCK" || value === "OUT_OF_STOCK" || value === "NEGATIVE" || value === "UNKNOWN") return value;
@@ -44,6 +54,27 @@ export function createNeonProvider(databaseUrl: string): DbProvider {
         `,
         );
         await sql.query(`CREATE INDEX IF NOT EXISTS idx_prices_product_id ON prices(product_id)`);
+
+        await sql.query(
+          `
+          CREATE TABLE IF NOT EXISTS product_changes (
+            id TEXT PRIMARY KEY,
+            product_id TEXT NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            product_name TEXT NOT NULL,
+            product_brand TEXT NULL,
+            change_type TEXT NOT NULL CHECK (change_type IN ('NEW_PRODUCT','STOCK_DROP','OUT_OF_STOCK','PRICE_CHANGE')),
+            from_qty DOUBLE PRECISION NULL,
+            to_qty DOUBLE PRECISION NULL,
+            from_availability TEXT NULL,
+            to_availability TEXT NULL,
+            from_price DOUBLE PRECISION NULL,
+            to_price DOUBLE PRECISION NULL,
+            created_at BIGINT NOT NULL
+          )
+        `,
+        );
+        await sql.query(`CREATE INDEX IF NOT EXISTS idx_product_changes_created_at ON product_changes(created_at DESC)`);
+        await sql.query(`CREATE INDEX IF NOT EXISTS idx_product_changes_product_id ON product_changes(product_id)`);
       })();
     }
     await ensured;
@@ -161,15 +192,76 @@ export function createNeonProvider(databaseUrl: string): DbProvider {
         const chunk = items.slice(i, i + chunkSize);
         if (chunk.length === 0) continue;
 
+        const nameKeys = Array.from(new Set(chunk.map((c) => c.nameKey)));
+        const placeholders = nameKeys.map((_, idx) => `$${idx + 1}`).join(",");
+        const existingRows = nameKeys.length
+          ? ((await sql.query(
+              `SELECT p.id, p.name_key, p.stock_qty, p.availability, p.name, p.brand, pr.dealer_price
+               FROM products p
+               LEFT JOIN prices pr ON pr.product_id = p.id
+               WHERE p.name_key IN (${placeholders})`,
+              nameKeys,
+            )) as Array<Record<string, unknown>>)
+          : [];
+        const existingByNameKey = new Map(
+          existingRows.map((r) => [String(r.name_key), r])
+        );
+
+        const changeRows: Array<{
+          id: string;
+          productId: string;
+          productName: string;
+          productBrand: string | null;
+          changeType: ProductChangeType;
+          fromQty: number | null;
+          toQty: number | null;
+          fromAvailability: string | null;
+          toAvailability: string | null;
+          createdAt: number;
+        }> = [];
+
         const values: unknown[] = [];
         const tuples: string[] = [];
         for (const it of chunk) {
+          const existing = existingByNameKey.get(it.nameKey);
+          const productId = existing ? String(existing.id) : it.id;
+          const fromQty = existing?.stock_qty == null ? null : Number(existing.stock_qty);
+          const toQty = it.stockQty == null ? null : it.stockQty;
+          const fromAvailability = existing ? parseAvailability(existing.availability) : null;
+          const toAvailability = it.availability;
+
+          const maybeAddChange = (changeType: ProductChangeType) => {
+            changeRows.push({
+              id: crypto.randomUUID(),
+              productId,
+              productName: it.name,
+              productBrand: it.brand,
+              changeType,
+              fromQty,
+              toQty,
+              fromAvailability,
+              toAvailability,
+              createdAt: it.updatedAt,
+            });
+          };
+
+          if (!existing) {
+            maybeAddChange("NEW_PRODUCT");
+          } else {
+            if (fromQty != null && toQty != null && toQty < fromQty) {
+              maybeAddChange("STOCK_DROP");
+            }
+            if (fromAvailability !== "OUT_OF_STOCK" && toAvailability === "OUT_OF_STOCK") {
+              maybeAddChange("OUT_OF_STOCK");
+            }
+          }
+
           const base = values.length;
           tuples.push(
             `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10})`,
           );
           values.push(
-            it.id,
+            productId,
             it.name,
             it.nameKey,
             it.brand,
@@ -197,6 +289,37 @@ export function createNeonProvider(databaseUrl: string): DbProvider {
             updated_at = EXCLUDED.updated_at;
         `;
         await sql.query(q, values);
+
+        if (changeRows.length) {
+          const changeValues: unknown[] = [];
+          const changeTuples: string[] = [];
+          for (const c of changeRows) {
+            const base = changeValues.length;
+            changeTuples.push(
+              `($${base + 1},$${base + 2},$${base + 3},$${base + 4},$${base + 5},$${base + 6},$${base + 7},$${base + 8},$${base + 9},$${base + 10},$${base + 11},$${base + 12})`,
+            );
+            changeValues.push(
+              c.id,
+              c.productId,
+              c.productName,
+              c.productBrand,
+              c.changeType,
+              c.fromQty,
+              c.toQty,
+              c.fromAvailability,
+              c.toAvailability,
+              null,
+              null,
+              c.createdAt,
+            );
+          }
+          await sql.query(
+            `INSERT INTO product_changes(
+              id, product_id, product_name, product_brand, change_type, from_qty, to_qty, from_availability, to_availability, from_price, to_price, created_at
+            ) VALUES ${changeTuples.join(",")}`,
+            changeValues,
+          );
+        }
       }
       return { upserted: items.length };
     },
@@ -223,6 +346,14 @@ export function createNeonProvider(databaseUrl: string): DbProvider {
       await ensureSchema();
       const now = Date.now();
       try {
+        const existingRows = (await sql.query(
+          `SELECT p.name, p.brand, pr.dealer_price FROM products p LEFT JOIN prices pr ON pr.product_id=p.id WHERE p.id=$1 LIMIT 1`,
+          [productId],
+        )) as Array<Record<string, unknown>>;
+        const existing = existingRows[0];
+        if (!existing) return { ok: false as const, error: "Product not found" };
+        const fromPrice = existing.dealer_price == null ? null : Number(existing.dealer_price);
+
         await sql.query(
           `
           INSERT INTO prices(product_id, dealer_price, updated_at)
@@ -231,10 +362,79 @@ export function createNeonProvider(databaseUrl: string): DbProvider {
         `,
           [productId, dealerPrice, now],
         );
+
+        const toPrice = dealerPrice;
+        const changed = fromPrice !== toPrice;
+        if (changed) {
+          await sql.query(
+            `INSERT INTO product_changes(
+              id, product_id, product_name, product_brand, change_type, from_qty, to_qty, from_availability, to_availability, from_price, to_price, created_at
+            ) VALUES ($1,$2,$3,$4,$5,NULL,NULL,NULL,NULL,$6,$7,$8)`,
+            [
+              crypto.randomUUID(),
+              productId,
+              String(existing.name ?? ""),
+              existing.brand == null ? null : String(existing.brand),
+              "PRICE_CHANGE",
+              fromPrice,
+              toPrice,
+              now,
+            ],
+          );
+        }
         return { ok: true as const };
       } catch (e) {
         return { ok: false as const, error: e instanceof Error ? e.message : "Failed to save price." };
       }
+    },
+
+    async listChanges(params: ListChangesParams): Promise<ProductChange[]> {
+      await ensureSchema();
+      const where: string[] = [];
+      const values: unknown[] = [];
+
+      if (params.productId) {
+        where.push(`product_id = $${values.length + 1}`);
+        values.push(params.productId);
+      }
+
+      if (params.since) {
+        where.push(`created_at >= $${values.length + 1}`);
+        values.push(params.since);
+      }
+
+      if (params.changeTypes && params.changeTypes.length) {
+        const placeholders = params.changeTypes.map((_, idx) => `$${values.length + idx + 1}`).join(",");
+        where.push(`change_type IN (${placeholders})`);
+        values.push(...params.changeTypes);
+      }
+
+      const limit = Math.min(params.limit ?? 100, 300);
+      values.push(limit);
+
+      const rows = (await sql.query(
+        `SELECT id, product_id, product_name, product_brand, change_type, from_qty, to_qty, from_availability, to_availability, from_price, to_price, created_at
+         FROM product_changes
+         ${where.length ? `WHERE ${where.join(" AND ")}` : ""}
+         ORDER BY created_at DESC
+         LIMIT $${values.length}`,
+        values,
+      )) as Array<Record<string, unknown>>;
+
+      return rows.map((r) => ({
+        id: String(r.id ?? ""),
+        productId: String(r.product_id ?? ""),
+        name: String(r.product_name ?? ""),
+        brand: r.product_brand == null ? null : String(r.product_brand),
+        changeType: r.change_type as ProductChangeType,
+        fromQty: r.from_qty == null ? null : Number(r.from_qty),
+        toQty: r.to_qty == null ? null : Number(r.to_qty),
+        fromAvailability: r.from_availability == null ? null : parseAvailability(r.from_availability),
+        toAvailability: r.to_availability == null ? null : parseAvailability(r.to_availability),
+        fromPrice: r.from_price == null ? null : Number(r.from_price),
+        toPrice: r.to_price == null ? null : Number(r.to_price),
+        createdAt: Number(r.created_at ?? 0),
+      }));
     },
   };
 }

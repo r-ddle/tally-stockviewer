@@ -30,6 +30,18 @@ type DerivedPrices = {
   darazPrice: number | null
 }
 
+type ProductChange = {
+  id: string
+  changeType: "NEW_PRODUCT" | "STOCK_DROP" | "OUT_OF_STOCK" | "PRICE_CHANGE"
+  fromQty: number | null
+  toQty: number | null
+  fromAvailability: Availability | null
+  toAvailability: Availability | null
+  fromPrice: number | null
+  toPrice: number | null
+  createdAt: number
+}
+
 interface ProductDetailSheetProps {
   product: ProductRow | null
   open: boolean
@@ -58,6 +70,8 @@ export function ProductDetailSheet({
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [changes, setChanges] = useState<ProductChange[]>([])
+  const [changesLoading, setChangesLoading] = useState(false)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const productId = product?.id ?? null
   const productDealerPrice = product?.dealerPrice ?? null
@@ -73,6 +87,27 @@ export function ProductDetailSheet({
       requestAnimationFrame(() => inputRef.current?.focus())
     }
   }, [productDealerPrice, productId])
+
+  useEffect(() => {
+    if (!productId || !open) return
+    let cancelled = false
+    const load = async () => {
+      setChangesLoading(true)
+      try {
+        const res = await fetch(`/api/products/${productId}/changes`)
+        const body = (await res.json()) as { items: ProductChange[] }
+        if (!cancelled) setChanges(body.items ?? [])
+      } catch {
+        if (!cancelled) setChanges([])
+      } finally {
+        if (!cancelled) setChangesLoading(false)
+      }
+    }
+    void load()
+    return () => {
+      cancelled = true
+    }
+  }, [open, productId])
 
   // Live calculation: compute prices from input value in real-time
   const livePrice = useMemo(() => {
@@ -211,6 +246,35 @@ export function ProductDetailSheet({
               <span className="text-muted-foreground">Updated</span>
               <span>{new Date(product.updatedAt).toLocaleDateString()}</span>
             </div>
+          </div>
+
+          {/* Change log */}
+          <div className="pt-3 border-t border-border space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium text-muted-foreground">Recent changes</span>
+              {changesLoading && <span className="text-xs text-muted-foreground">Loading…</span>}
+            </div>
+            {changes.length === 0 && !changesLoading ? (
+              <p className="text-sm text-muted-foreground">No recent changes recorded.</p>
+            ) : (
+              <div className="space-y-2 max-h-48 overflow-auto pr-1">
+                {changes.map((c) => (
+                  <div key={c.id} className="rounded-lg border border-border bg-muted/30 px-3 py-2">
+                    <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
+                      <span>{new Date(c.createdAt).toLocaleString()}</span>
+                      <span className="font-medium text-foreground">{c.changeType.replace("_", " ")}</span>
+                    </div>
+                    {c.changeType === "PRICE_CHANGE" ? (
+                      <p className="text-sm text-foreground">Price {formatMoney(c.fromPrice)} → {formatMoney(c.toPrice)}</p>
+                    ) : (
+                      <p className="text-sm text-foreground">
+                        Qty {c.fromQty ?? "—"} → {c.toQty ?? "—"} ({(c.toAvailability ?? "").replace("_", " ")})
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
       )}

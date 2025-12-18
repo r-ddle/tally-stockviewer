@@ -58,16 +58,19 @@ export async function GET(_req: NextRequest) {
     ws.getColumn(5).width = 14 // Dealer
     ws.getColumn(6).width = 14 // Retail
     ws.getColumn(7).width = 14 // Daraz
+    ws.getColumn(8).width = 16 // Net Value
 
     ws.getColumn(2).numFmt = "#,##0.###"
     ws.getColumn(5).numFmt = '"LKR" #,##0'
     ws.getColumn(6).numFmt = '"LKR" #,##0'
     ws.getColumn(7).numFmt = '"LKR" #,##0'
+    ws.getColumn(8).numFmt = '"LKR" #,##0'
 
     ws.getColumn(2).alignment = { horizontal: "right" }
     ws.getColumn(5).alignment = { horizontal: "right" }
     ws.getColumn(6).alignment = { horizontal: "right" }
     ws.getColumn(7).alignment = { horizontal: "right" }
+    ws.getColumn(8).alignment = { horizontal: "right" }
   }
 
   for (const brand of brandBuckets) {
@@ -81,6 +84,7 @@ export async function GET(_req: NextRequest) {
     // Prepare table data
     const dataRows = rows.map((r) => {
       const { retailPrice, darazPrice } = computeDerivedPrices(r.dealerPrice)
+      const netValue = r.stockQty != null && r.dealerPrice != null ? r.stockQty * r.dealerPrice : null
       return [
         r.name,
         r.stockQty ?? null,
@@ -89,6 +93,7 @@ export async function GET(_req: NextRequest) {
         r.dealerPrice ?? null,
         retailPrice ?? null,
         darazPrice ?? null,
+        netValue,
       ]
     })
 
@@ -105,6 +110,7 @@ export async function GET(_req: NextRequest) {
         { name: "Dealer" },
         { name: "Retail" },
         { name: "Daraz" },
+        { name: "Net Value" },
       ],
       rows: dataRows,
     })

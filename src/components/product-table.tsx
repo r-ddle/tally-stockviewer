@@ -161,7 +161,7 @@ export function ProductTable({
                   <div className="px-4 pb-4 space-y-3 bg-muted/30">
                     {/* Price grid */}
                     <div className="grid grid-cols-3 gap-2">
-                      <div className="bg-primary/10 rounded-lg p-2.5 text-center">
+                      <div className="bg-card rounded-lg p-2.5 text-center">
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Dealer</p>
                         <p className="text-sm font-semibold tabular-nums text-primary">{formatMoney(item.dealerPrice)}</p>
                       </div>

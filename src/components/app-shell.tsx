@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 import { useAuthContext } from "@/components/auth-provider";
-import { Package, LayoutDashboard, LogOut, User } from "lucide-react";
+import { Package, LayoutDashboard, LogOut, User, Activity } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -54,6 +54,10 @@ export function AppShell({ children }: AppShellProps) {
                 <Package className="h-4 w-4" />
                 Products
               </NavLink>
+              <NavLink href="/activity" active={pathname?.startsWith("/activity")}>
+                <Activity className="h-4 w-4" />
+                Activity
+              </NavLink>
             </nav>
 
             {/* User menu */}
@@ -94,6 +98,10 @@ export function AppShell({ children }: AppShellProps) {
           <MobileNavLink href="/products" active={pathname?.startsWith("/products")}>
             <Package className="h-5 w-5" />
             <span className="text-xs font-medium">Products</span>
+          </MobileNavLink>
+          <MobileNavLink href="/activity" active={pathname?.startsWith("/activity")}>
+            <Activity className="h-5 w-5" />
+            <span className="text-xs font-medium">Activity</span>
           </MobileNavLink>
         </div>
       </nav>

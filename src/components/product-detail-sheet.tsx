@@ -71,8 +71,6 @@ export function ProductDetailSheet({
 }: ProductDetailSheetProps) {
   const isMobile = useIsMobile()
   const [dealerPriceInput, setDealerPriceInput] = useState<string>("")
-  const [retailPriceInput, setRetailPriceInput] = useState<string>("")
-  const [editMode, setEditMode] = useState<"dealer" | "retail">("dealer")
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -94,17 +92,12 @@ export function ProductDetailSheet({
       setDealerPriceInput(
         productDealerPrice == null || !Number.isFinite(productDealerPrice) ? "" : String(productDealerPrice),
       )
-      const derived = computeDerivedPrices(productDealerPrice)
-      setRetailPriceInput(
-        derived.retailPrice == null || !Number.isFinite(derived.retailPrice) ? "" : String(derived.retailPrice),
-      )
       setCopied(false)
       setError(null)
-      setEditMode("dealer")
       setCustomerDiscount(10)
       setNotes("")
     }
-  }, [productDealerPrice, productId, computeDerivedPrices, product?.name])
+  }, [productDealerPrice, productId, product?.name])
 
   useEffect(() => {
     if (!productId || !open) return
@@ -129,20 +122,10 @@ export function ProductDetailSheet({
 
   // Live calculation: compute prices from input value in real-time
   const livePrice = useMemo(() => {
-    if (editMode === "dealer") {
-      const cleaned = dealerPriceInput.replace(/,/g, "").trim()
-      const parsed = cleaned === "" ? null : Number.parseFloat(cleaned)
-      return parsed != null && Number.isFinite(parsed) ? parsed : null
-    } else {
-      // Calculate dealer from retail (retail / 1.5)
-      const cleaned = retailPriceInput.replace(/,/g, "").trim()
-      const parsed = cleaned === "" ? null : Number.parseFloat(cleaned)
-      if (parsed != null && Number.isFinite(parsed)) {
-        return parsed / 1.5
-      }
-      return null
-    }
-  }, [dealerPriceInput, retailPriceInput, editMode])
+    const cleaned = dealerPriceInput.replace(/,/g, "").trim()
+    const parsed = cleaned === "" ? null : Number.parseFloat(cleaned)
+    return parsed != null && Number.isFinite(parsed) ? parsed : null
+  }, [dealerPriceInput])
 
   const liveDerived = useMemo(() => {
     const prices = computeDerivedPrices(livePrice)
@@ -152,20 +135,6 @@ export function ProductDetailSheet({
       discountPercent: customerDiscount,
     }
   }, [livePrice, computeDerivedPrices, customerDiscount])
-
-  // Sync retail price when dealer changes (only if not actively editing)
-  useEffect(() => {
-    if (!isEditingPriceRef.current && editMode === "dealer" && liveDerived.retailPrice != null) {
-      setRetailPriceInput(String(liveDerived.retailPrice))
-    }
-  }, [editMode, liveDerived.retailPrice])
-
-  // Sync dealer price when retail changes (only if not actively editing)
-  useEffect(() => {
-    if (!isEditingPriceRef.current && editMode === "retail" && livePrice != null) {
-      setDealerPriceInput(String(livePrice.toFixed(2)))
-    }
-  }, [editMode, livePrice])
 
   // Check if input has unsaved changes
   const hasChanges = useMemo(() => {
@@ -220,7 +189,6 @@ export function ProductDetailSheet({
               <div className="flex-1">
                 {editingDisplayName && canEditPrices ? (
                   <Input
-                    autoFocus
                     value={displayName}
                     onChange={(e) => setDisplayName(e.target.value)}
                     className="text-lg font-semibold mb-1 rounded-lg"
@@ -330,36 +298,15 @@ export function ProductDetailSheet({
               <Label className="text-sm font-medium">Update Price</Label>
               <div className="space-y-2">
                 <div className="flex gap-2">
-                  <Button
-                    variant={editMode === "dealer" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setEditMode("dealer")}
-                    className="flex-1"
-                  >
-                    Dealer
-                  </Button>
-                  <Button
-                    variant={editMode === "retail" ? "default" : "outline"}
-                    size="sm"
-                    onClick={() => setEditMode("retail")}
-                    className="flex-1"
-                  >
-                    Retail
-                  </Button>
-                </div>
-                <div className="flex gap-2">
                   <Input
+                    autoFocus
                     type="text"
                     inputMode="decimal"
                     placeholder="Enter price..."
-                    value={editMode === "dealer" ? dealerPriceInput : retailPriceInput}
+                    value={dealerPriceInput}
                     onChange={(e) => {
                       isEditingPriceRef.current = true
-                      if (editMode === "dealer") {
-                        setDealerPriceInput(e.target.value)
-                      } else {
-                        setRetailPriceInput(e.target.value)
-                      }
+                      setDealerPriceInput(e.target.value)
                     }}
                     onBlur={() => {
                       isEditingPriceRef.current = false
@@ -441,11 +388,13 @@ export function ProductDetailSheet({
         price={priceToConfirm}
         priceDisplay={formatMoney(priceToConfirm)}
         onConfirm={(priceType) => {
-          if (priceType === "dealer") {
-            setEditMode("dealer")
-          } else {
-            setEditMode("retail")
+          // If retail was selected, convert to dealer price (retail / 1.5)
+          let finalDealerPrice = priceToConfirm
+          if (priceType === "retail" && priceToConfirm != null) {
+            finalDealerPrice = priceToConfirm / 1.5
           }
+          // Update the input to show the dealer price
+          setDealerPriceInput(finalDealerPrice != null ? String(finalDealerPrice) : "")
           saveDealerPrice()
         }}
       />

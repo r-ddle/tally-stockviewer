@@ -20,6 +20,48 @@ import { Search, X, SlidersHorizontal, RefreshCcw, Download } from "lucide-react
 import { cn } from "@/lib/utils"
 import { useAuthContext } from "@/components/auth-provider"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
+import Fuse from "fuse.js"
+
+// Synonym mapping for common abbreviations
+const SEARCH_SYNONYMS: Record<string, string[]> = {
+  "gloves": ["glv", "glove"],
+  "ventilation": ["vent", "ventilator"],
+  "protection": ["prot", "protect"],
+  "safety": ["safe"],
+  "equipment": ["equip", "eq"],
+  "industrial": ["ind", "indust"],
+  "professional": ["prof", "pro"],
+  "helmet": ["helm"],
+  "goggles": ["gog", "goggle"],
+  "mask": ["msk"],
+  "jacket": ["jkt", "jack"],
+  "pants": ["pnt"],
+  "boots": ["boot", "bt"],
+  "kit": ["set"],
+  "pack": ["pk"],
+  "box": ["bx"],
+}
+
+// Expand query with synonyms
+function expandQueryWithSynonyms(query: string): string {
+  const lowerQuery = query.toLowerCase()
+  const words = lowerQuery.split(/\s+/)
+
+  const expandedWords = words.map(word => {
+    // Check if word is an abbreviation
+    for (const [fullWord, abbrevs] of Object.entries(SEARCH_SYNONYMS)) {
+      if (abbrevs.includes(word)) {
+        return `${word}|${fullWord}` // Add synonym with OR operator
+      }
+      if (fullWord === word) {
+        return `${word}|${abbrevs.join("|")}`
+      }
+    }
+    return word
+  })
+
+  return expandedWords.join(" ")
+}
 
 type ProductRow = {
   id: string
@@ -59,7 +101,6 @@ export default function ProductsPage() {
   const [availability, setAvailability] = useState<"all" | Availability>("all")
   const [sortKey, setSortKey] = useState<SortKey>("name")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
-  const [searchFocused, setSearchFocused] = useState(false)
   const [filterOpen, setFilterOpen] = useState(false)
 
   const [selected, setSelected] = useState<ProductRow | null>(null)
@@ -88,18 +129,43 @@ export default function ProductsPage() {
   }, [refresh])
 
   const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase()
     let result = items
-    if (q) {
-      result = result.filter((it) => `${it.name} ${it.brand ?? ""}`.toLowerCase().includes(q))
-    }
+
+    // Apply brand filter
     if (brand !== "all") {
-      result = brand === "__unknown__" ? result.filter((it) => !it.brand) : result.filter((it) => it.brand === brand)
+      result = brand === "__unknown__"
+        ? result.filter((it) => !it.brand)
+        : result.filter((it) => it.brand === brand)
     }
+
+    // Apply availability filter
     if (availability !== "all") {
       result = result.filter((it) => it.availability === availability)
     }
 
+    // Apply fuzzy search if query exists
+    if (search.trim()) {
+      const expandedQuery = expandQueryWithSynonyms(search.trim())
+
+      // Configure Fuse.js for fuzzy search
+      const fuse = new Fuse(result, {
+        keys: [
+          { name: "name", weight: 2 }, // Original product name (higher weight)
+          { name: "brand", weight: 1 },
+        ],
+        threshold: 0.6, // 0 = perfect match, 1 = match anything (0.6 for looser matching)
+        distance: 200, // Maximum distance for fuzzy matching
+        ignoreLocation: true, // Search anywhere in string
+        includeScore: true, // Include scores for debugging
+        findAllMatches: true, // Find all matching patterns
+        minMatchCharLength: 1, // Match single characters
+      })
+
+      const fuseResults = fuse.search(expandedQuery)
+      result = fuseResults.map(r => r.item)
+    }
+
+    // Apply sorting
     const sorted = [...result].sort((a, b) => {
       let cmp = 0
       if (sortKey === "name") cmp = a.name.localeCompare(b.name)
@@ -117,6 +183,7 @@ export default function ProductsPage() {
         )
       return sortDir === "asc" ? cmp : -cmp
     })
+
     return sorted
   }, [availability, brand, items, search, sortDir, sortKey])
 
@@ -163,10 +230,10 @@ export default function ProductsPage() {
   }, [])
 
   return (
-    <div className="flex flex-col h-screen bg-background">
-      {/* Fixed header - hidden when search is active or user has searched */}
-      {!searchFocused && !search && (
-        <div className="bg-background border-b border-border sticky top-0 z-40 px-4 sm:px-6 py-4">
+    <div className="flex flex-col h-screen bg-background md:h-auto">
+      {/* Fixed header - hidden when user has searched (Desktop only) */}
+      {!search && (
+        <div className="hidden md:block bg-background border-b border-border px-4 sm:px-6 py-4">
           <div className="mx-auto max-w-6xl">
             <div>
               <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
@@ -181,76 +248,18 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Search bar - connected with filter, refresh, export - sticky top */}
-      <div className={cn(
-        "bg-background border-b border-border sticky top-0 z-50 px-4 sm:px-6 py-3 transition-all",
-        searchFocused && "border-0"
-      )}>
-        <div className={cn(
-          "mx-auto max-w-6xl flex items-center gap-2",
-          searchFocused && "max-w-none"
-        )}>
-          {/* Search input */}
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search products..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              onFocus={() => setSearchFocused(true)}
-              onBlur={() => setSearchFocused(false)}
-              className="pl-10 pr-10 h-11 rounded-lg"
-            />
-            {search && (
-              <button
-                onClick={() => setSearch("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-              >
-                <X className="h-4 w-4" />
-              </button>
-            )}
+      {/* Main content area - scrollable */}
+      <div className="flex-1 overflow-y-auto md:pb-0 pb-56">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6">
+          {/* Mobile header - shows product count (Mobile only) */}
+          <div className="md:hidden mb-4">
+            <h1 className="text-xl font-semibold text-foreground">Products</h1>
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{filtered.length.toLocaleString("en-IN")}</span>
+              {filtered.length !== items.length && ` of ${items.length.toLocaleString("en-IN")}`}
+            </p>
           </div>
 
-          {/* Filter button - icon only */}
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={() => setFilterOpen(true)}
-            className="h-11 w-11 rounded-lg shrink-0"
-            title="Open filters"
-          >
-            <SlidersHorizontal className="h-5 w-5" />
-          </Button>
-
-          {/* Refresh button */}
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={refresh}
-            disabled={loading}
-            className="h-11 w-11 rounded-lg shrink-0"
-            title="Refresh product list"
-          >
-            <RefreshCcw className={cn("h-5 w-5", loading && "animate-spin")} />
-          </Button>
-
-          {/* Export button */}
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={exportXlsx}
-            disabled={exporting}
-            className="h-11 w-11 rounded-lg shrink-0"
-            title="Export all brands to Excel (one sheet per brand)"
-          >
-            <Download className={cn("h-5 w-5", exporting && "animate-pulse")} />
-          </Button>
-        </div>
-      </div>
-
-      {/* Main content area - scrollable */}
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6">
           {/* Error state */}
           {error && (
             <div className="mb-6 rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
@@ -298,6 +307,124 @@ export default function ProductsPage() {
               searchActive={search.trim().length > 0}
             />
           </div>
+        </div>
+      </div>
+
+      {/* Search bar - fixed above mobile navbar */}
+      <div className="md:hidden fixed bottom-16 left-0 right-0 z-40 bg-background border-t border-border px-4 py-3 transition-all has-focus:border-t-2 has-focus:shadow-lg">
+        <div className="flex items-center gap-2 transition-all">
+          {/* Search input */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 pr-10 h-10 rounded-lg text-sm"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Filter button - icon only */}
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => setFilterOpen(true)}
+            className="h-10 w-10 rounded-lg shrink-0"
+            title="Open filters"
+          >
+            <SlidersHorizontal className="h-4 w-4" />
+          </Button>
+
+          {/* Refresh button */}
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={refresh}
+            disabled={loading}
+            className="h-10 w-10 rounded-lg shrink-0"
+            title="Refresh product list"
+          >
+            <RefreshCcw className={cn("h-4 w-4", loading && "animate-spin")} />
+          </Button>
+
+          {/* Export button */}
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={exportXlsx}
+            disabled={exporting}
+            className="h-10 w-10 rounded-lg shrink-0"
+            title="Export"
+          >
+            <Download className={cn("h-4 w-4", exporting && "animate-pulse")} />
+          </Button>
+        </div>
+      </div>
+
+      {/* Search bar - fixed at bottom on desktop */}
+      <div className="hidden md:block fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border px-4 sm:px-6 py-3 transition-all has-focus:border-t-2 has-focus:shadow-2xl">
+        <div className="mx-auto max-w-6xl flex items-center gap-2 transition-all has-focus:max-w-none">
+          {/* Search input */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search products..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="pl-10 pr-10 h-11 rounded-lg"
+            />
+            {search && (
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+
+          {/* Filter button - icon only */}
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => setFilterOpen(true)}
+            className="h-11 w-11 rounded-lg shrink-0"
+            title="Open filters"
+          >
+            <SlidersHorizontal className="h-5 w-5" />
+          </Button>
+
+          {/* Refresh button */}
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={refresh}
+            disabled={loading}
+            className="h-11 w-11 rounded-lg shrink-0"
+            title="Refresh product list"
+          >
+            <RefreshCcw className={cn("h-5 w-5", loading && "animate-spin")} />
+          </Button>
+
+          {/* Export button */}
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={exportXlsx}
+            disabled={exporting}
+            className="h-11 w-11 rounded-lg shrink-0"
+            title="Export all brands to Excel (one sheet per brand)"
+          >
+            <Download className={cn("h-5 w-5", exporting && "animate-pulse")} />
+          </Button>
         </div>
       </div>
 

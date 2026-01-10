@@ -67,12 +67,13 @@ export function ProductDetailSheet({
 }: ProductDetailSheetProps) {
   const isMobile = useIsMobile()
   const [dealerPriceInput, setDealerPriceInput] = useState<string>("")
+  const [retailPriceInput, setRetailPriceInput] = useState<string>("")
+  const [editMode, setEditMode] = useState<"dealer" | "retail">("dealer")
   const [saving, setSaving] = useState(false)
   const [copied, setCopied] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [changes, setChanges] = useState<ProductChange[]>([])
   const [changesLoading, setChangesLoading] = useState(false)
-  const inputRef = useRef<HTMLInputElement | null>(null)
   const productId = product?.id ?? null
   const productDealerPrice = product?.dealerPrice ?? null
 
@@ -81,12 +82,15 @@ export function ProductDetailSheet({
       setDealerPriceInput(
         productDealerPrice == null || !Number.isFinite(productDealerPrice) ? "" : String(productDealerPrice),
       )
+      const derived = computeDerivedPrices(productDealerPrice)
+      setRetailPriceInput(
+        derived.retailPrice == null || !Number.isFinite(derived.retailPrice) ? "" : String(derived.retailPrice),
+      )
       setCopied(false)
       setError(null)
-      // Keep focus on the price input when dialog opens so typing doesn't lose focus
-      requestAnimationFrame(() => inputRef.current?.focus())
+      setEditMode("dealer")
     }
-  }, [productDealerPrice, productId])
+  }, [productDealerPrice, productId, computeDerivedPrices])
 
   useEffect(() => {
     if (!productId || !open) return
@@ -111,14 +115,38 @@ export function ProductDetailSheet({
 
   // Live calculation: compute prices from input value in real-time
   const livePrice = useMemo(() => {
-    const cleaned = dealerPriceInput.replace(/,/g, "").trim()
-    const parsed = cleaned === "" ? null : Number.parseFloat(cleaned)
-    return parsed != null && Number.isFinite(parsed) ? parsed : null
-  }, [dealerPriceInput])
+    if (editMode === "dealer") {
+      const cleaned = dealerPriceInput.replace(/,/g, "").trim()
+      const parsed = cleaned === "" ? null : Number.parseFloat(cleaned)
+      return parsed != null && Number.isFinite(parsed) ? parsed : null
+    } else {
+      // Calculate dealer from retail (retail / 1.5)
+      const cleaned = retailPriceInput.replace(/,/g, "").trim()
+      const parsed = cleaned === "" ? null : Number.parseFloat(cleaned)
+      if (parsed != null && Number.isFinite(parsed)) {
+        return parsed / 1.5
+      }
+      return null
+    }
+  }, [dealerPriceInput, retailPriceInput, editMode])
 
   const liveDerived = useMemo(() => {
     return computeDerivedPrices(livePrice)
   }, [livePrice, computeDerivedPrices])
+
+  // Sync retail price when dealer changes
+  useEffect(() => {
+    if (editMode === "dealer" && liveDerived.retailPrice != null) {
+      setRetailPriceInput(String(liveDerived.retailPrice))
+    }
+  }, [editMode, liveDerived.retailPrice])
+
+  // Sync dealer price when retail changes
+  useEffect(() => {
+    if (editMode === "retail" && livePrice != null) {
+      setDealerPriceInput(String(livePrice.toFixed(2)))
+    }
+  }, [editMode, livePrice])
 
   // Check if input has unsaved changes
   const hasChanges = useMemo(() => {
@@ -201,36 +229,59 @@ export function ProductDetailSheet({
             </div>
           </div>
 
-          {/* Edit dealer price */}
+          {/* Edit prices */}
           {canEditPrices && (
             <div className="space-y-3 pt-2 border-t border-border">
-              <Label htmlFor="dealer-price" className="text-sm font-medium">
-                Update Dealer Price
+              <Label className="text-sm font-medium">
+                Update Price
               </Label>
-              <div className="flex gap-2">
-                <Input
-                  id="dealer-price"
-                  type="text"
-                  inputMode="decimal"
-                  placeholder="Enter price..."
-                  ref={inputRef}
-                  autoFocus
-                  value={dealerPriceInput}
-                  onChange={(e) => setDealerPriceInput(e.target.value)}
-                  className="h-10 rounded-lg tabular-nums"
-                />
-                <Button
-                  onClick={saveDealerPrice}
-                  disabled={saving || !hasChanges}
-                  className="h-10 px-4 rounded-lg gap-2 shrink-0"
-                >
-                  {saving ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Save className="h-4 w-4" />
-                  )}
-                  Save
-                </Button>
+              <div className="space-y-2">
+                <div className="flex gap-2">
+                  <Button
+                    variant={editMode === "dealer" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setEditMode("dealer")}
+                    className="flex-1"
+                  >
+                    Dealer
+                  </Button>
+                  <Button
+                    variant={editMode === "retail" ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setEditMode("retail")}
+                    className="flex-1"
+                  >
+                    Retail
+                  </Button>
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="Enter price..."
+                    value={editMode === "dealer" ? dealerPriceInput : retailPriceInput}
+                    onChange={(e) => {
+                      if (editMode === "dealer") {
+                        setDealerPriceInput(e.target.value)
+                      } else {
+                        setRetailPriceInput(e.target.value)
+                      }
+                    }}
+                    className="h-10 rounded-lg tabular-nums"
+                  />
+                  <Button
+                    onClick={saveDealerPrice}
+                    disabled={saving || !hasChanges}
+                    className="h-10 px-4 rounded-lg gap-2 shrink-0"
+                  >
+                    {saving ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <Save className="h-4 w-4" />
+                    )}
+                    Save
+                  </Button>
+                </div>
               </div>
               {error && <p className="text-sm text-destructive">{error}</p>}
             </div>
@@ -300,20 +351,7 @@ export function ProductDetailSheet({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent
-        className="sm:max-w-md"
-        // Stop Radix from taking focus away from the input on open
-        onOpenAutoFocus={(e) => {
-          e.preventDefault()
-          requestAnimationFrame(() => inputRef.current?.focus())
-        }}
-        // If focus ever shifts to the dialog container, push it back to the input
-        onFocusCapture={(e) => {
-          if (e.target === e.currentTarget) {
-            requestAnimationFrame(() => inputRef.current?.focus())
-          }
-        }}
-      >
+      <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle className="text-lg leading-tight pr-6">{product?.name ?? "Product"}</DialogTitle>
           <DialogDescription>{product?.brand ?? "—"}</DialogDescription>

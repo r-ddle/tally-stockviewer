@@ -106,6 +106,7 @@ export default function ProductsPage() {
   const [selected, setSelected] = useState<ProductRow | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
   const [exporting, setExporting] = useState(false)
+  const [focusPriceInput, setFocusPriceInput] = useState(false)
 
   const refresh = useCallback(async () => {
     setLoading(true)
@@ -189,6 +190,13 @@ export default function ProductsPage() {
 
   const openItem = (item: ProductRow) => {
     setSelected(item)
+    setFocusPriceInput(false)
+    setSheetOpen(true)
+  }
+
+  const openItemForEditPrice = (item: ProductRow) => {
+    setSelected(item)
+    setFocusPriceInput(true)
     setSheetOpen(true)
   }
 
@@ -253,11 +261,21 @@ export default function ProductsPage() {
         <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6">
           {/* Mobile header - shows product count (Mobile only) */}
           <div className="md:hidden mb-4">
-            <h1 className="text-xl font-semibold text-foreground">Products</h1>
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{filtered.length.toLocaleString("en-IN")}</span>
-              {filtered.length !== items.length && ` of ${items.length.toLocaleString("en-IN")}`}
-            </p>
+            <h1 className="text-xl font-semibold text-foreground mb-2">Products</h1>
+            <div className="flex flex-wrap items-center gap-2">
+              <Badge variant="outline" className="gap-1.5">
+                <span className="font-semibold">{filtered.length.toLocaleString("en-IN")}</span>
+                Total
+              </Badge>
+              <Badge variant="outline" className="gap-1.5 border-green-200 bg-green-50 dark:bg-green-950/30 text-green-700 dark:text-green-300">
+                <span className="font-semibold">{filtered.filter(p => p.availability === "IN_STOCK").length.toLocaleString("en-IN")}</span>
+                Available
+              </Badge>
+              <Badge variant="outline" className="gap-1.5 border-red-200 bg-red-50 dark:bg-red-950/30 text-red-700 dark:text-red-300">
+                <span className="font-semibold">{filtered.filter(p => p.availability === "NEGATIVE").length.toLocaleString("en-IN")}</span>
+                Out of Stock
+              </Badge>
+            </div>
           </div>
 
           {/* Error state */}
@@ -300,6 +318,7 @@ export default function ProductsPage() {
               formatMoney={formatMoney}
               computeDerivedPrices={computeDerivedPrices}
               onRowClick={openItem}
+              onEditPrice={openItemForEditPrice}
               canEditPrices={auth.isOwner}
               ownerToken={auth.token}
               onDealerPriceSaved={handlePriceSaved}
@@ -439,6 +458,7 @@ export default function ProductsPage() {
         onPriceSaved={handlePriceSaved}
         canEditPrices={auth.isOwner}
         ownerToken={auth.token}
+        shouldFocusPrice={focusPriceInput}
       />
 
       {/* Filter drawer */}

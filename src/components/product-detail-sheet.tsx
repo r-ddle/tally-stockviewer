@@ -56,6 +56,7 @@ interface ProductDetailSheetProps {
   onPriceSaved: (id: string, newPrice: number | null) => void
   canEditPrices: boolean
   ownerToken: string | null
+  shouldFocusPrice?: boolean
 }
 
 export function ProductDetailSheet({
@@ -68,6 +69,7 @@ export function ProductDetailSheet({
   onPriceSaved,
   canEditPrices,
   ownerToken,
+  shouldFocusPrice = false,
 }: ProductDetailSheetProps) {
   const isMobile = useIsMobile()
   const [dealerPriceInput, setDealerPriceInput] = useState<string>("")
@@ -299,7 +301,7 @@ export function ProductDetailSheet({
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <Input
-                    autoFocus
+                    autoFocus={shouldFocusPrice}
                     type="text"
                     inputMode="decimal"
                     placeholder="Enter price..."

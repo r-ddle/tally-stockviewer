@@ -37,6 +37,7 @@ interface ProductTableProps {
   formatMoney: (value: number | null) => string
   computeDerivedPrices: (dealerPrice: number | null) => DerivedPrices
   onRowClick: (item: ProductRow) => void
+  onEditPrice?: (item: ProductRow) => void
   canEditPrices: boolean
   ownerToken: string | null
   onDealerPriceSaved: (id: string, newPrice: number | null) => void
@@ -53,6 +54,7 @@ export function ProductTable({
   formatMoney,
   computeDerivedPrices,
   onRowClick,
+  onEditPrice,
   canEditPrices,
   ownerToken,
   onDealerPriceSaved,
@@ -198,7 +200,7 @@ export function ProductTable({
                       {canEditPrices && (
                         <Button
                           size="sm"
-                          onClick={() => onRowClick(item)}
+                          onClick={() => onEditPrice?.(item)}
                           className="flex-1 h-9 rounded-lg text-xs gap-1"
                         >
                           <Pencil className="h-3 w-3" />

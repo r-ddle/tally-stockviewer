@@ -20,48 +20,6 @@ import { Search, X, SlidersHorizontal, RefreshCcw, Download } from "lucide-react
 import { cn } from "@/lib/utils"
 import { useAuthContext } from "@/components/auth-provider"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
-import Fuse from "fuse.js"
-
-// Synonym mapping for common abbreviations
-const SEARCH_SYNONYMS: Record<string, string[]> = {
-  "gloves": ["glv", "glove"],
-  "ventilation": ["vent", "ventilator"],
-  "protection": ["prot", "protect"],
-  "safety": ["safe"],
-  "equipment": ["equip", "eq"],
-  "industrial": ["ind", "indust"],
-  "professional": ["prof", "pro"],
-  "helmet": ["helm"],
-  "goggles": ["gog", "goggle"],
-  "mask": ["msk"],
-  "jacket": ["jkt", "jack"],
-  "pants": ["pnt"],
-  "boots": ["boot", "bt"],
-  "kit": ["set"],
-  "pack": ["pk"],
-  "box": ["bx"],
-}
-
-// Expand query with synonyms
-function expandQueryWithSynonyms(query: string): string {
-  const lowerQuery = query.toLowerCase()
-  const words = lowerQuery.split(/\s+/)
-
-  const expandedWords = words.map(word => {
-    // Check if word is an abbreviation
-    for (const [fullWord, abbrevs] of Object.entries(SEARCH_SYNONYMS)) {
-      if (abbrevs.includes(word)) {
-        return `${word}|${fullWord}` // Add synonym with OR operator
-      }
-      if (fullWord === word) {
-        return `${word}|${abbrevs.join("|")}`
-      }
-    }
-    return word
-  })
-
-  return expandedWords.join(" ")
-}
 
 type ProductRow = {
   id: string
@@ -144,26 +102,14 @@ export default function ProductsPage() {
       result = result.filter((it) => it.availability === availability)
     }
 
-    // Apply fuzzy search if query exists
+    // Apply simple substring search if query exists
     if (search.trim()) {
-      const expandedQuery = expandQueryWithSynonyms(search.trim())
-
-      // Configure Fuse.js for fuzzy search
-      const fuse = new Fuse(result, {
-        keys: [
-          { name: "name", weight: 2 }, // Original product name (higher weight)
-          { name: "brand", weight: 1 },
-        ],
-        threshold: 0.6, // 0 = perfect match, 1 = match anything (0.6 for looser matching)
-        distance: 200, // Maximum distance for fuzzy matching
-        ignoreLocation: true, // Search anywhere in string
-        includeScore: true, // Include scores for debugging
-        findAllMatches: true, // Find all matching patterns
-        minMatchCharLength: 1, // Match single characters
-      })
-
-      const fuseResults = fuse.search(expandedQuery)
-      result = fuseResults.map(r => r.item)
+      const query = search.trim().toLowerCase()
+      result = result.filter(
+        (item) =>
+          item.name.toLowerCase().includes(query) ||
+          (item.brand?.toLowerCase().includes(query) ?? false)
+      )
     }
 
     // Apply sorting

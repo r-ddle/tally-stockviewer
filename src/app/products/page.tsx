@@ -229,9 +229,9 @@ export default function ProductsPage() {
             <span className="hidden sm:inline">Filters:</span>
           </div>
 
-          <Select value={brand} onValueChange={setBrand}>
+          <Select value={brand} onValueChange={(v) => setBrand(v ?? "all")}>
             <SelectTrigger className="w-[150px] h-9 rounded-lg">
-              <SelectValue placeholder="All Brands" />
+              <SelectValue>All Brands</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Brands</SelectItem>
@@ -242,9 +242,9 @@ export default function ProductsPage() {
             </SelectContent>
           </Select>
 
-          <Select value={availability} onValueChange={(v) => setAvailability(v as "all" | Availability)}>
+          <Select value={availability} onValueChange={(v) => setAvailability((v ?? "all") as "all" | Availability)}>
             <SelectTrigger className="w-[140px] h-9 rounded-lg">
-              <SelectValue placeholder="All Status" />
+              <SelectValue>All Status</SelectValue>
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Status</SelectItem>
@@ -255,9 +255,9 @@ export default function ProductsPage() {
           </Select>
 
           <div className="hidden sm:flex items-center gap-2 border-l border-border pl-3">
-            <Select value={sortKey} onValueChange={(v) => setSortKey(v as SortKey)}>
+            <Select value={sortKey} onValueChange={(v) => setSortKey((v ?? "name") as SortKey)}>
               <SelectTrigger className="w-[130px] h-9 rounded-lg">
-                <SelectValue placeholder="Sort by" />
+                <SelectValue>Sort by</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="name">Name</SelectItem>

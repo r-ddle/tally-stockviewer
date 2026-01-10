@@ -62,7 +62,7 @@ export function AppShell({ children }: AppShellProps) {
 
             {/* User menu */}
             <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+              <DropdownMenuTrigger>
                 <Button variant="ghost" className="h-10 gap-2 px-3 rounded-xl">
                   <div className="h-7 w-7 rounded-full bg-primary/10 flex items-center justify-center">
                     <User className="h-4 w-4 text-primary" />

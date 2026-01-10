@@ -130,12 +130,12 @@ export default function Home() {
               Search, filter, and view pricing for all inventory items.
             </p>
           </div>
-          <Button asChild size="lg" className="rounded-xl gap-2 font-medium shrink-0">
-            <Link href="/products">
+          <Link href="/products">
+            <Button size="lg" className="rounded-xl gap-2 font-medium shrink-0">
               View Products
               <ArrowRight className="h-4 w-4" />
-            </Link>
-          </Button>
+            </Button>
+          </Link>
         </div>
       </div>
 

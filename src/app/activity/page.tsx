@@ -154,7 +154,7 @@ export default function ActivityPage() {
 
             <Select value={changeType} onValueChange={(v) => setChangeType(v as ChangeTypeFilter)}>
               <SelectTrigger className="w-[170px] h-9 rounded-lg">
-                <SelectValue placeholder="Change type" />
+                <SelectValue>Change type</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All types</SelectItem>
@@ -167,7 +167,7 @@ export default function ActivityPage() {
 
             <Select value={timeRange} onValueChange={(v) => setTimeRange(v as TimeRange)}>
               <SelectTrigger className="w-[150px] h-9 rounded-lg">
-                <SelectValue placeholder="Time range" />
+                <SelectValue>Time range</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="7">Last 7 days</SelectItem>

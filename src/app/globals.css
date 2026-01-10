@@ -1,51 +1,52 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
 @custom-variant light (&:is(.dark *));
 
 /* Clean, neutral Apple-inspired color palette */
 :root {
   /* Core colors - Warm neutrals with subtle depth */
-  --background: oklch(0.99 0.002 240);
-  --foreground: oklch(0.15 0.01 240);
+  /* Font family: Prefer SF Pro with sensible fallbacks */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro", "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
 
   /* Cards and surfaces */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.15 0.01 240);
+  --card-foreground: oklch(0.145 0 0);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.15 0.01 240);
+  --popover-foreground: oklch(0.145 0 0);
 
   /* Primary - Professional blue */
-  --primary: oklch(0.45 0.15 250);
-  --primary-foreground: oklch(0.99 0 0);
+  --primary: oklch(0.488 0.243 264.376);
+  --primary-foreground: oklch(0.97 0.014 254.604);
 
   /* Secondary - Subtle gray */
-  --secondary: oklch(0.97 0.003 240);
-  --secondary-foreground: oklch(0.25 0.01 240);
+  --secondary: oklch(0.967 0.001 286.375);
+  --secondary-foreground: oklch(0.21 0.006 285.885);
 
   /* Muted - For backgrounds and subtle elements */
-  --muted: oklch(0.96 0.003 240);
-  --muted-foreground: oklch(0.45 0.01 240);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.556 0 0);
 
   /* Accent */
-  --accent: oklch(0.96 0.015 250);
-  --accent-foreground: oklch(0.25 0.03 250);
+  --accent: oklch(0.488 0.243 264.376);
+  --accent-foreground: oklch(0.97 0.014 254.604);
 
   /* Destructive - Calm red */
-  --destructive: oklch(0.55 0.2 25);
+  --destructive: oklch(0.58 0.22 27);
   --destructive-foreground: oklch(0.99 0 0);
 
   /* Borders and inputs */
-  --border: oklch(0.91 0.003 240);
-  --input: oklch(0.91 0.003 240);
-  --ring: oklch(0.45 0.15 250);
+  --border: oklch(0.922 0 0);
+  --input: oklch(0.922 0 0);
+  --ring: oklch(0.708 0 0);
 
   /* Chart colors */
-  --chart-1: oklch(0.5 0.16 250);
-  --chart-2: oklch(0.6 0.18 145);
-  --chart-3: oklch(0.5 0.12 270);
-  --chart-4: oklch(0.7 0.15 85);
-  --chart-5: oklch(0.55 0.2 25);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
 
   /* Semantic colors */
   --success: oklch(0.55 0.16 145);
@@ -54,22 +55,24 @@
   --warning-foreground: oklch(0.2 0.05 65);
 
   /* Radius - Generous rounding for modern feel */
-  --radius: 0.75rem;
+  --radius: 0.625rem;
 
   /* Sidebar (keeping for compatibility) */
-  --sidebar: oklch(0.99 0.002 240);
-  --sidebar-foreground: oklch(0.15 0.01 240);
-  --sidebar-primary: oklch(0.45 0.15 250);
-  --sidebar-primary-foreground: oklch(0.99 0 0);
-  --sidebar-accent: oklch(0.96 0.015 250);
-  --sidebar-accent-foreground: oklch(0.25 0.03 250);
-  --sidebar-border: oklch(0.91 0.003 240);
-  --sidebar-ring: oklch(0.45 0.15 250);
+  --sidebar: oklch(0.985 0 0);
+  --sidebar-foreground: oklch(0.145 0 0);
+  --sidebar-primary: oklch(0.546 0.245 262.881);
+  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
+  --sidebar-accent: oklch(0.488 0.243 264.376);
+  --sidebar-accent-foreground: oklch(0.97 0.014 254.604);
+  --sidebar-border: oklch(0.922 0 0);
+  --sidebar-ring: oklch(0.708 0 0);
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
 }
 
 @theme inline {
   /* System font stack - Apple SF Pro inspired */
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --font-sans: var(--font-sans);
   --font-mono: "SF Mono", ui-monospace, Menlo, Monaco, "Cascadia Code", monospace;
 
   /* Color mappings */
@@ -113,10 +116,14 @@
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-ring: var(--sidebar-ring);
+  --radius-2xl: calc(var(--radius) + 8px);
+  --radius-3xl: calc(var(--radius) + 12px);
+  --radius-4xl: calc(var(--radius) + 16px);
 }
 
 @layer base {
   * {
+    @apply border-border outline-ring/50;
     @apply border-border outline-ring/50;
   }
 
@@ -125,6 +132,7 @@
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    @apply bg-background text-foreground;
   }
 
   /* Better default font sizing */
@@ -169,4 +177,38 @@ html {
 /* Tabular numbers for data display */
 .tabular-nums {
   font-variant-numeric: tabular-nums;
+}
+
+.dark {
+  --background: oklch(0.145 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.205 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.42 0.18 266);
+  --primary-foreground: oklch(0.97 0.014 254.604);
+  --secondary: oklch(0.274 0.006 286.033);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.269 0 0);
+  --muted-foreground: oklch(0.708 0 0);
+  --accent: oklch(0.42 0.18 266);
+  --accent-foreground: oklch(0.97 0.014 254.604);
+  --destructive: oklch(0.704 0.191 22.216);
+  --border: oklch(1 0 0 / 10%);
+  --input: oklch(1 0 0 / 15%);
+  --ring: oklch(0.556 0 0);
+  --chart-1: oklch(0.809 0.105 251.813);
+  --chart-2: oklch(0.623 0.214 259.815);
+  --chart-3: oklch(0.546 0.245 262.881);
+  --chart-4: oklch(0.488 0.243 264.376);
+  --chart-5: oklch(0.424 0.199 265.638);
+  --sidebar: oklch(0.205 0 0);
+  --sidebar-foreground: oklch(0.985 0 0);
+  --sidebar-primary: oklch(0.623 0.214 259.815);
+  --sidebar-primary-foreground: oklch(0.97 0.014 254.604);
+  --sidebar-accent: oklch(0.42 0.18 266);
+  --sidebar-accent-foreground: oklch(0.97 0.014 254.604);
+  --sidebar-border: oklch(1 0 0 / 10%);
+  --sidebar-ring: oklch(0.556 0 0);
 }

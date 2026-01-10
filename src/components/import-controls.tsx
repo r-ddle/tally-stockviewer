@@ -183,7 +183,7 @@ export function ImportControls({
         </Button>
 
         <DropdownMenu>
-          <DropdownMenuTrigger asChild>
+          <DropdownMenuTrigger>
             <Button variant="outline" disabled={disabled} className="gap-2 bg-transparent">
               {busy === "sample" || busy === "migrate" ? (
                 <Loader2 className="h-4 w-4 animate-spin" />

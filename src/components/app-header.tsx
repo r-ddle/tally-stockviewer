@@ -91,12 +91,14 @@ export function AppHeader() {
           </nav>
 
           <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="outline" className="gap-2 bg-transparent">
-                <Shield className="h-4 w-4" />
-                {effectiveMode === "owner" ? "Owner" : "Viewer"}
-              </Button>
-            </SheetTrigger>
+            <SheetTrigger
+              render={
+                <Button variant="outline" className="gap-2 bg-transparent">
+                  <Shield className="h-4 w-4" />
+                  {effectiveMode === "owner" ? "Owner" : "Viewer"}
+                </Button>
+              }
+            />
             <SheetContent className="w-[420px] sm:w-[460px]">
               <SheetHeader>
                 <SheetTitle>Access Mode</SheetTitle>

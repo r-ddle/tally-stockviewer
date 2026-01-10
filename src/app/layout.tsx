@@ -1,15 +1,9 @@
 import type React from "react"
 import type { Metadata, Viewport } from "next"
-import { Inter } from "next/font/google"
 import "./globals.css"
 import { AuthProvider } from "@/components/auth-provider"
 import { AppShell } from "@/components/app-shell"
-
-const inter = Inter({
-  subsets: ["latin"],
-  display: "swap",
-  variable: "--font-sans",
-})
+import { cn } from "@/lib/utils";
 
 export const metadata: Metadata = {
   title: "Tally Stock Viewer",
@@ -30,8 +24,8 @@ export default function RootLayout({
   children: React.ReactNode
 }>) {
   return (
-    <html lang="en" className="light">
-      <body className={`${inter.variable} font-sans antialiased`}>
+    <html lang="en" className={cn("light") }>
+      <body className={"font-sans antialiased"}>
         <AuthProvider>
           <AppShell>{children}</AppShell>
         </AuthProvider>

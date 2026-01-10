@@ -90,9 +90,9 @@ export function DataTableToolbar({
               <span className="hidden sm:inline">Filters:</span>
             </div>
 
-            <Select value={brand} onValueChange={onBrandChange}>
+            <Select value={brand} onValueChange={(v) => onBrandChange(v ?? "all")}>
               <SelectTrigger className="w-[160px]">
-                <SelectValue placeholder="Brand" />
+                <SelectValue>Brand</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Brands</SelectItem>
@@ -105,9 +105,9 @@ export function DataTableToolbar({
               </SelectContent>
             </Select>
 
-            <Select value={availability} onValueChange={(v) => onAvailabilityChange(v as "all" | Availability)}>
+            <Select value={availability} onValueChange={(v) => onAvailabilityChange((v ?? "all") as "all" | Availability)}>
               <SelectTrigger className="w-[140px]">
-                <SelectValue placeholder="Status" />
+                <SelectValue>Status</SelectValue>
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All Status</SelectItem>
@@ -119,9 +119,9 @@ export function DataTableToolbar({
             </Select>
 
             <div className="flex items-center gap-1.5 border-l border-border pl-2">
-              <Select value={sortKey} onValueChange={(v) => onSortKeyChange(v as SortKey)}>
+              <Select value={sortKey} onValueChange={(v) => onSortKeyChange((v ?? "name") as SortKey)}>
                 <SelectTrigger className="w-[130px]">
-                  <SelectValue placeholder="Sort by" />
+                  <SelectValue>Sort by</SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="name">Name</SelectItem>
@@ -204,7 +204,7 @@ export function DataTableToolbar({
         {/* Filter button and results count */}
         <div className="flex items-center justify-between gap-3">
           <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-            <DrawerTrigger asChild>
+            <DrawerTrigger>
               <Button
                 variant="outline"
                 size="lg"
@@ -230,9 +230,9 @@ export function DataTableToolbar({
                 {/* Brand filter */}
                 <div className="space-y-3">
                   <label className="text-base font-semibold text-foreground">Brand</label>
-                  <Select value={brand} onValueChange={onBrandChange}>
+                  <Select value={brand} onValueChange={(v) => onBrandChange(v ?? "all")}>
                     <SelectTrigger className="h-14 text-lg rounded-2xl">
-                      <SelectValue placeholder="All Brands" />
+                      <SelectValue>All Brands</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="all" className="text-lg py-3">
@@ -279,9 +279,9 @@ export function DataTableToolbar({
                 {/* Sort options */}
                 <div className="space-y-3">
                   <label className="text-base font-semibold text-foreground">Sort By</label>
-                  <Select value={sortKey} onValueChange={(v) => onSortKeyChange(v as SortKey)}>
+                  <Select value={sortKey} onValueChange={(v) => onSortKeyChange((v ?? "name") as SortKey)}>
                     <SelectTrigger className="h-14 text-lg rounded-2xl">
-                      <SelectValue placeholder="Name" />
+                      <SelectValue>Name</SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="name" className="text-lg py-3">
@@ -323,7 +323,7 @@ export function DataTableToolbar({
                     Clear All
                   </Button>
                 )}
-                <DrawerClose asChild>
+                <DrawerClose>
                   <Button size="lg" className="flex-1 h-14 text-base font-semibold rounded-2xl">
                     Show Results
                   </Button>

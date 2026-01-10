@@ -6,6 +6,7 @@ import { ProductDetailSheet } from "@/components/product-detail-sheet"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Label } from "@/components/ui/label"
 import {
   Select,
   SelectContent,
@@ -15,9 +16,10 @@ import {
 } from "@/components/ui/select"
 import { computeDerivedPrices, formatMoney, formatQty } from "@/lib/pricing"
 import type { Availability } from "@/lib/domain"
-import { RefreshCcw, Search, X, SlidersHorizontal, Download } from "lucide-react"
+import { Search, X, SlidersHorizontal, RefreshCcw, Download } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthContext } from "@/components/auth-provider"
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 
 type ProductRow = {
   id: string
@@ -57,6 +59,8 @@ export default function ProductsPage() {
   const [availability, setAvailability] = useState<"all" | Availability>("all")
   const [sortKey, setSortKey] = useState<SortKey>("name")
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc")
+  const [searchFocused, setSearchFocused] = useState(false)
+  const [filterOpen, setFilterOpen] = useState(false)
 
   const [selected, setSelected] = useState<ProductRow | null>(null)
   const [sheetOpen, setSheetOpen] = useState(false)
@@ -159,176 +163,142 @@ export default function ProductsPage() {
   }, [])
 
   return (
-    <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 md:py-12">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-6">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
-            Products
-          </h1>
-          <p className="mt-1 text-muted-foreground">
-            <span className="font-medium text-foreground">{filtered.length.toLocaleString("en-IN")}</span>
-            {filtered.length !== items.length && ` of ${items.length.toLocaleString("en-IN")}`} products
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={exportXlsx}
-            disabled={exporting}
-            className="gap-2 h-10 rounded-xl shrink-0"
-            title="Export all brands to Excel (one sheet per brand)"
-          >
-            <Download className={cn("h-4 w-4", exporting && "animate-pulse")} />
-            {exporting ? "Exporting…" : "Export XLSX"}
-          </Button>
-          <Button
-            variant="outline"
-            onClick={refresh}
-            disabled={loading}
-            className="gap-2 h-10 rounded-xl shrink-0"
-          >
-            <RefreshCcw className={cn("h-4 w-4", loading && "animate-spin")} />
-            Refresh
-          </Button>
-        </div>
-      </div>
-
-      {/* Error state */}
-      {error && (
-        <div className="mb-6 rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
-          {error}
+    <div className="flex flex-col h-screen bg-background">
+      {/* Fixed header - hidden when search is active or user has searched */}
+      {!searchFocused && !search && (
+        <div className="bg-background border-b border-border sticky top-0 z-40 px-4 sm:px-6 py-4">
+          <div className="mx-auto max-w-6xl">
+            <div>
+              <h1 className="text-2xl md:text-3xl font-semibold tracking-tight text-foreground">
+                Products
+              </h1>
+              <p className="mt-1 text-muted-foreground">
+                <span className="font-medium text-foreground">{filtered.length.toLocaleString("en-IN")}</span>
+                {filtered.length !== items.length && ` of ${items.length.toLocaleString("en-IN")}`} products
+              </p>
+            </div>
+          </div>
         </div>
       )}
 
-      {/* Search and filters */}
-      <div className="bg-card border border-border rounded-xl p-4 mb-6 space-y-4">
-        {/* Search bar */}
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search products..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="pl-10 pr-10 h-11 rounded-xl"
-          />
-          {search && (
-            <button
-              onClick={() => setSearch("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Filter row */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <SlidersHorizontal className="h-4 w-4" />
-            <span className="hidden sm:inline">Filters:</span>
-          </div>
-
-          <Select value={brand} onValueChange={(v) => setBrand(v ?? "all")}>
-            <SelectTrigger className="w-[150px] h-9 rounded-lg">
-              <SelectValue>All Brands</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Brands</SelectItem>
-              <SelectItem value="__unknown__">(No Brand)</SelectItem>
-              {brands.map((b) => (
-                <SelectItem key={b} value={b}>{b}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={availability} onValueChange={(v) => setAvailability((v ?? "all") as "all" | Availability)}>
-            <SelectTrigger className="w-[140px] h-9 rounded-lg">
-              <SelectValue>All Status</SelectValue>
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Status</SelectItem>
-              <SelectItem value="IN_STOCK">In Stock</SelectItem>
-              <SelectItem value="OUT_OF_STOCK">Out of Stock</SelectItem>
-              <SelectItem value="NEGATIVE">Negative</SelectItem>
-            </SelectContent>
-          </Select>
-
-          <div className="hidden sm:flex items-center gap-2 border-l border-border pl-3">
-            <Select value={sortKey} onValueChange={(v) => setSortKey((v ?? "name") as SortKey)}>
-              <SelectTrigger className="w-[130px] h-9 rounded-lg">
-                <SelectValue>Sort by</SelectValue>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="name">Name</SelectItem>
-                <SelectItem value="qty">Quantity</SelectItem>
-                <SelectItem value="dealerPrice">Dealer</SelectItem>
-                <SelectItem value="retail">Retail</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSortDir((d) => (d === "asc" ? "desc" : "asc"))}
-              className="h-9 px-3 rounded-lg"
-            >
-              {sortDir === "asc" ? "A→Z" : "Z→A"}
-            </Button>
-          </div>
-
-          {hasFilters && (
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={clearFilters}
-              className="h-9 px-3 rounded-lg text-muted-foreground hover:text-foreground"
-            >
-              <X className="h-3.5 w-3.5 mr-1" />
-              Clear
-            </Button>
-          )}
-        </div>
-
-        {/* Active filter badges */}
-        {hasFilters && (
-          <div className="flex flex-wrap gap-2">
+      {/* Search bar - connected with filter, refresh, export - sticky top */}
+      <div className={cn(
+        "bg-background border-b border-border sticky top-0 z-50 px-4 sm:px-6 py-3 transition-all",
+        searchFocused && "border-0"
+      )}>
+        <div className={cn(
+          "mx-auto max-w-6xl flex items-center gap-2",
+          searchFocused && "max-w-none"
+        )}>
+          {/* Search input */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search products..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              onFocus={() => setSearchFocused(true)}
+              onBlur={() => setSearchFocused(false)}
+              className="pl-10 pr-10 h-11 rounded-lg"
+            />
             {search && (
-              <Badge variant="secondary" className="gap-1.5 rounded-full px-3">
-                &quot;{search}&quot;
-                <button onClick={() => setSearch("")}><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {brand !== "all" && (
-              <Badge variant="secondary" className="gap-1.5 rounded-full px-3">
-                {brand === "__unknown__" ? "No Brand" : brand}
-                <button onClick={() => setBrand("all")}><X className="h-3 w-3" /></button>
-              </Badge>
-            )}
-            {availability !== "all" && (
-              <Badge variant="secondary" className="gap-1.5 rounded-full px-3">
-                {availability.replace("_", " ")}
-                <button onClick={() => setAvailability("all")}><X className="h-3 w-3" /></button>
-              </Badge>
+              <button
+                onClick={() => setSearch("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="h-4 w-4" />
+              </button>
             )}
           </div>
-        )}
+
+          {/* Filter button - icon only */}
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={() => setFilterOpen(true)}
+            className="h-11 w-11 rounded-lg shrink-0"
+            title="Open filters"
+          >
+            <SlidersHorizontal className="h-5 w-5" />
+          </Button>
+
+          {/* Refresh button */}
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={refresh}
+            disabled={loading}
+            className="h-11 w-11 rounded-lg shrink-0"
+            title="Refresh product list"
+          >
+            <RefreshCcw className={cn("h-5 w-5", loading && "animate-spin")} />
+          </Button>
+
+          {/* Export button */}
+          <Button
+            size="icon"
+            variant="outline"
+            onClick={exportXlsx}
+            disabled={exporting}
+            className="h-11 w-11 rounded-lg shrink-0"
+            title="Export all brands to Excel (one sheet per brand)"
+          >
+            <Download className={cn("h-5 w-5", exporting && "animate-pulse")} />
+          </Button>
+        </div>
       </div>
 
-      {/* Products table */}
-      <div className="bg-card border border-border rounded-xl overflow-hidden">
-        <ProductTable
-          items={filtered}
-          loading={loading}
-          formatQty={formatQty}
-          formatMoney={formatMoney}
-          computeDerivedPrices={computeDerivedPrices}
-          onRowClick={openItem}
-          canEditPrices={auth.isOwner}
-          ownerToken={auth.token}
-          onDealerPriceSaved={handlePriceSaved}
-          onError={(m) => setError(m)}
-        />
+      {/* Main content area - scrollable */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-6">
+          {/* Error state */}
+          {error && (
+            <div className="mb-6 rounded-xl bg-destructive/10 border border-destructive/20 px-4 py-3 text-sm text-destructive">
+              {error}
+            </div>
+          )}
+
+          {/* Active filter badges - shown when search or filters active */}
+          {hasFilters && (
+            <div className="mb-6 flex flex-wrap gap-2">
+              {search && (
+                <Badge variant="secondary" className="gap-1.5 rounded-full px-3">
+                  &quot;{search}&quot;
+                  <button onClick={() => setSearch("")}><X className="h-3 w-3" /></button>
+                </Badge>
+              )}
+              {brand !== "all" && (
+                <Badge variant="secondary" className="gap-1.5 rounded-full px-3">
+                  {brand === "__unknown__" ? "No Brand" : brand}
+                  <button onClick={() => setBrand("all")}><X className="h-3 w-3" /></button>
+                </Badge>
+              )}
+              {availability !== "all" && (
+                <Badge variant="secondary" className="gap-1.5 rounded-full px-3">
+                  {availability.replace("_", " ")}
+                  <button onClick={() => setAvailability("all")}><X className="h-3 w-3" /></button>
+                </Badge>
+              )}
+            </div>
+          )}
+
+          {/* Products table */}
+          <div className="bg-card border border-border rounded-xl overflow-hidden">
+            <ProductTable
+              items={filtered}
+              loading={loading}
+              formatQty={formatQty}
+              formatMoney={formatMoney}
+              computeDerivedPrices={computeDerivedPrices}
+              onRowClick={openItem}
+              canEditPrices={auth.isOwner}
+              ownerToken={auth.token}
+              onDealerPriceSaved={handlePriceSaved}
+              onError={(m) => setError(m)}
+              searchActive={search.trim().length > 0}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Product detail sheet */}
@@ -343,6 +313,98 @@ export default function ProductsPage() {
         canEditPrices={auth.isOwner}
         ownerToken={auth.token}
       />
+
+      {/* Filter drawer */}
+      <Drawer open={filterOpen} onOpenChange={setFilterOpen}>
+        <DrawerContent>
+          <DrawerHeader>
+            <DrawerTitle>Filters</DrawerTitle>
+          </DrawerHeader>
+          <div className="px-4 pb-6 space-y-4">
+            {/* Brand filter */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Brand</Label>
+              <Select value={brand} onValueChange={(v) => setBrand(v ?? "all")}>
+                <SelectTrigger className="rounded-lg">
+                  <SelectValue>All Brands</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Brands</SelectItem>
+                  <SelectItem value="__unknown__">(No Brand)</SelectItem>
+                  {brands.map((b) => (
+                    <SelectItem key={b} value={b}>{b}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Availability filter */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Status</Label>
+              <Select value={availability} onValueChange={(v) => setAvailability((v ?? "all") as "all" | Availability)}>
+                <SelectTrigger className="rounded-lg">
+                  <SelectValue>All Status</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="IN_STOCK">In Stock</SelectItem>
+                  <SelectItem value="OUT_OF_STOCK">Out of Stock</SelectItem>
+                  <SelectItem value="NEGATIVE">Negative</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sort options */}
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Sort by</Label>
+              <Select value={sortKey} onValueChange={(v) => setSortKey((v ?? "name") as SortKey)}>
+                <SelectTrigger className="rounded-lg">
+                  <SelectValue>Sort by</SelectValue>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="name">Name</SelectItem>
+                  <SelectItem value="qty">Quantity</SelectItem>
+                  <SelectItem value="dealerPrice">Dealer Price</SelectItem>
+                  <SelectItem value="retail">Retail Price</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Sort direction */}
+            <div className="flex gap-2">
+              <Button
+                variant={sortDir === "asc" ? "default" : "outline"}
+                onClick={() => setSortDir("asc")}
+                className="flex-1 rounded-lg"
+              >
+                A → Z
+              </Button>
+              <Button
+                variant={sortDir === "desc" ? "default" : "outline"}
+                onClick={() => setSortDir("desc")}
+                className="flex-1 rounded-lg"
+              >
+                Z → A
+              </Button>
+            </div>
+
+            {/* Clear filters */}
+            {hasFilters && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  clearFilters()
+                  setFilterOpen(false)
+                }}
+                className="w-full rounded-lg"
+              >
+                <X className="h-4 w-4 mr-2" />
+                Clear Filters
+              </Button>
+            )}
+          </div>
+        </DrawerContent>
+      </Drawer>
     </div>
   )
 }

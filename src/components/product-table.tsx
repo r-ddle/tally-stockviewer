@@ -5,7 +5,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Button } from "@/components/ui/button"
 import { StockBadge } from "@/components/stock-badge"
 import type { Availability } from "@/lib/domain"
-import { ChevronLeft, ChevronRight, Package, Loader2, Pencil, X, Check, ChevronDown } from "lucide-react"
+import { ChevronLeft, ChevronRight, Package, Loader2, Pencil, X, Check, ChevronDown, Eye } from "lucide-react"
 import { Input } from "@/components/ui/input"
 import { ownerHeaders } from "@/lib/owner"
 import { cn } from "@/lib/utils"
@@ -26,6 +26,8 @@ type ProductRow = {
 type DerivedPrices = {
   retailPrice: number | null
   darazPrice: number | null
+  customerPrice: number | null
+  discountPercent: number
 }
 
 interface ProductTableProps {
@@ -39,6 +41,7 @@ interface ProductTableProps {
   ownerToken: string | null
   onDealerPriceSaved: (id: string, newPrice: number | null) => void
   onError?: (message: string) => void
+  searchActive?: boolean
 }
 
 const PAGE_SIZE = 50
@@ -54,6 +57,7 @@ export function ProductTable({
   ownerToken,
   onDealerPriceSaved,
   onError,
+  searchActive = false,
 }: ProductTableProps) {
   const isMobile = useIsMobile()
   const [page, setPage] = useState(0)
@@ -64,7 +68,13 @@ export function ProductTable({
 
   useEffect(() => {
     setPage(0)
-  }, [items.length])
+    // Auto-expand first item when search is active
+    if (searchActive && items.length > 0) {
+      setExpandedId(items[0]?.id ?? null)
+    } else {
+      setExpandedId(null)
+    }
+  }, [items.length, searchActive])
 
   const totalPages = Math.ceil(items.length / PAGE_SIZE)
   const paginatedItems = items.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE)
@@ -169,9 +179,9 @@ export function ProductTable({
                         <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Retail</p>
                         <p className="text-sm font-semibold tabular-nums">{formatMoney(derived.retailPrice)}</p>
                       </div>
-                      <div className="bg-card rounded-lg p-2.5 text-center border border-border">
-                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Daraz</p>
-                        <p className="text-sm font-semibold tabular-nums">{formatMoney(derived.darazPrice)}</p>
+                      <div className="bg-card rounded-lg p-2.5 text-center border border-primary/50">
+                        <p className="text-[10px] text-muted-foreground uppercase tracking-wider mb-0.5">Customer</p>
+                        <p className="text-sm font-semibold tabular-nums text-primary">{formatMoney(derived.customerPrice)}</p>
                       </div>
                     </div>
 
@@ -257,7 +267,8 @@ export function ProductTable({
               <TableHead className="font-medium w-[100px]">Status</TableHead>
               <TableHead className="font-medium text-right w-[110px]">Dealer</TableHead>
               <TableHead className="font-medium text-right w-[110px]">Retail</TableHead>
-              <TableHead className="font-medium text-right w-[110px]">Daraz</TableHead>
+              <TableHead className="font-medium text-right w-[110px]">Customer</TableHead>
+              <TableHead className="font-medium text-center w-[60px]">View</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -272,9 +283,8 @@ export function ProductTable({
               return (
                 <TableRow
                   key={item.id}
-                  onClick={() => onRowClick(item)}
                   className={cn(
-                    "cursor-pointer transition-colors hover:bg-muted/30",
+                    "transition-colors hover:bg-muted/30",
                     isEditing && "bg-primary/5"
                   )}
                 >
@@ -335,7 +345,7 @@ export function ProductTable({
                       </div>
                     ) : (
                       <div className="flex items-center justify-end gap-2">
-                        <span>{formatMoney(item.dealerPrice)}</span>
+                        <span className="font-semibold text-primary">{formatMoney(item.dealerPrice)}</span>
                         {canEditPrices ? (
                           <Pencil className="h-3.5 w-3.5 opacity-0 transition-opacity group-hover:opacity-70" />
                         ) : null}
@@ -343,7 +353,20 @@ export function ProductTable({
                     )}
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{formatMoney(derived.retailPrice)}</TableCell>
-                  <TableCell className="text-right tabular-nums">{formatMoney(derived.darazPrice)}</TableCell>
+                  <TableCell className="text-right tabular-nums text-primary font-semibold">{formatMoney(derived.customerPrice)}</TableCell>
+                  <TableCell className="text-center">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 rounded-lg"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        onRowClick(item)
+                      }}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
                 </TableRow>
               )
             })}

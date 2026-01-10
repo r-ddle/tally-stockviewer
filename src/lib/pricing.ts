@@ -1,20 +1,52 @@
 export type DerivedPrices = {
   retailPrice: number | null;
   darazPrice: number | null;
+  customerPrice: number | null;
+  discountPercent: number;
 };
 
 const NA = "—";
+const DEFAULT_CUSTOMER_DISCOUNT = 10;
+
+export function calculateCustomerPrice(
+  retailPrice: number | null,
+  discountPercent: number = DEFAULT_CUSTOMER_DISCOUNT
+): number | null {
+  if (retailPrice == null || !Number.isFinite(retailPrice)) return null;
+  return retailPrice * (1 - discountPercent / 100);
+}
 
 export function computeDerivedPrices(dealerPrice: number | null): DerivedPrices {
   if (dealerPrice == null || !Number.isFinite(dealerPrice)) {
     return {
       retailPrice: null,
       darazPrice: null,
+      customerPrice: null,
+      discountPercent: DEFAULT_CUSTOMER_DISCOUNT,
     };
   }
   const retailPrice = dealerPrice / 0.75;
   const darazPrice = dealerPrice / 0.6;
-  return { retailPrice, darazPrice };
+  const customerPrice = calculateCustomerPrice(retailPrice, DEFAULT_CUSTOMER_DISCOUNT);
+  return { retailPrice, darazPrice, customerPrice, discountPercent: DEFAULT_CUSTOMER_DISCOUNT };
+}
+
+export function computeDerivedPricesWithDiscount(
+  dealerPrice: number | null,
+  discountPercent: number = DEFAULT_CUSTOMER_DISCOUNT
+): DerivedPrices {
+  if (dealerPrice == null || !Number.isFinite(dealerPrice)) {
+    return {
+      retailPrice: null,
+      darazPrice: null,
+      customerPrice: null,
+      discountPercent,
+    };
+  }
+  const retailPrice = dealerPrice / 0.75;
+  const darazPrice = dealerPrice / 0.6;
+  const customerPrice = calculateCustomerPrice(retailPrice, discountPercent);
+  return { retailPrice, darazPrice, customerPrice, discountPercent };
 }
 
 export function formatMoney(value: number | null): string {

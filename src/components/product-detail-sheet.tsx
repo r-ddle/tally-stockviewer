@@ -7,11 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { StockBadge } from "@/components/stock-badge"
 import type { Availability } from "@/lib/domain"
-import { Copy, Save, Check, Loader2 } from "lucide-react"
+import { Copy, Save, Check, Loader2, Edit2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
 import { ownerHeaders } from "@/lib/owner"
 import { useIsMobile } from "@/lib/use-is-mobile"
+import { PriceConfirmationDialog } from "@/components/price-confirmation-dialog"
+import { Slider } from "@/components/ui/slider"
 
 type ProductRow = {
   id: string
@@ -28,6 +30,8 @@ type ProductRow = {
 type DerivedPrices = {
   retailPrice: number | null
   darazPrice: number | null
+  customerPrice: number | null
+  discountPercent: number
 }
 
 type ProductChange = {
@@ -74,11 +78,19 @@ export function ProductDetailSheet({
   const [error, setError] = useState<string | null>(null)
   const [changes, setChanges] = useState<ProductChange[]>([])
   const [changesLoading, setChangesLoading] = useState(false)
+  const [displayName, setDisplayName] = useState<string>("")
+  const [editingDisplayName, setEditingDisplayName] = useState(false)
+  const [notes, setNotes] = useState<string>("")
+  const [customerDiscount, setCustomerDiscount] = useState(10)
+  const [confirmDialogOpen, setConfirmDialogOpen] = useState(false)
+  const [priceToConfirm, setPriceToConfirm] = useState<number | null>(null)
+  const isEditingPriceRef = useRef(false)
   const productId = product?.id ?? null
   const productDealerPrice = product?.dealerPrice ?? null
 
   useEffect(() => {
     if (productId) {
+      setDisplayName(product?.name ?? "")
       setDealerPriceInput(
         productDealerPrice == null || !Number.isFinite(productDealerPrice) ? "" : String(productDealerPrice),
       )
@@ -89,8 +101,10 @@ export function ProductDetailSheet({
       setCopied(false)
       setError(null)
       setEditMode("dealer")
+      setCustomerDiscount(10)
+      setNotes("")
     }
-  }, [productDealerPrice, productId, computeDerivedPrices])
+  }, [productDealerPrice, productId, computeDerivedPrices, product?.name])
 
   useEffect(() => {
     if (!productId || !open) return
@@ -131,19 +145,24 @@ export function ProductDetailSheet({
   }, [dealerPriceInput, retailPriceInput, editMode])
 
   const liveDerived = useMemo(() => {
-    return computeDerivedPrices(livePrice)
-  }, [livePrice, computeDerivedPrices])
+    const prices = computeDerivedPrices(livePrice)
+    return {
+      ...prices,
+      customerPrice: prices.retailPrice ? prices.retailPrice * (1 - customerDiscount / 100) : null,
+      discountPercent: customerDiscount,
+    }
+  }, [livePrice, computeDerivedPrices, customerDiscount])
 
-  // Sync retail price when dealer changes
+  // Sync retail price when dealer changes (only if not actively editing)
   useEffect(() => {
-    if (editMode === "dealer" && liveDerived.retailPrice != null) {
+    if (!isEditingPriceRef.current && editMode === "dealer" && liveDerived.retailPrice != null) {
       setRetailPriceInput(String(liveDerived.retailPrice))
     }
   }, [editMode, liveDerived.retailPrice])
 
-  // Sync dealer price when retail changes
+  // Sync dealer price when retail changes (only if not actively editing)
   useEffect(() => {
-    if (editMode === "retail" && livePrice != null) {
+    if (!isEditingPriceRef.current && editMode === "retail" && livePrice != null) {
       setDealerPriceInput(String(livePrice.toFixed(2)))
     }
   }, [editMode, livePrice])
@@ -195,46 +214,120 @@ export function ProductDetailSheet({
     <>
       {product && (
         <div className="space-y-6">
-          {/* Status and copy */}
-          <div className="flex items-center justify-between gap-3">
-            <StockBadge availability={product.availability} size="large" showIcon />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={copyPrices}
-              className="gap-2 rounded-lg h-9"
-            >
-              {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
-              {copied ? "Copied" : "Copy"}
-            </Button>
+          {/* Product Title - with edit for admins */}
+          <div className="space-y-1">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex-1">
+                {editingDisplayName && canEditPrices ? (
+                  <Input
+                    autoFocus
+                    value={displayName}
+                    onChange={(e) => setDisplayName(e.target.value)}
+                    className="text-lg font-semibold mb-1 rounded-lg"
+                    placeholder="Product name"
+                  />
+                ) : (
+                  <h2 className="text-lg font-semibold">{displayName}</h2>
+                )}
+                <p className="text-sm text-muted-foreground">SKU: {product.name}</p>
+              </div>
+              {canEditPrices && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEditingDisplayName(!editingDisplayName)}
+                  className="h-8 w-8 p-0"
+                >
+                  <Edit2 className="h-4 w-4" />
+                </Button>
+              )}
+            </div>
+            <p className="text-sm text-muted-foreground">{product.brand ?? "No brand"}</p>
           </div>
 
-          {/* Stock quantity */}
-          <div className="bg-muted/50 rounded-xl p-4">
+          {/* Stock & Availability */}
+          <div className="space-y-2">
+            <Label className="text-xs font-medium text-muted-foreground">Stock</Label>
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Current Stock</span>
-              <span className="text-xl font-semibold tabular-nums">{formatQty(product.stockQty, product.unit)}</span>
+              <span className="text-2xl font-semibold tabular-nums">{formatQty(product.stockQty, product.unit)}</span>
+              <StockBadge availability={product.availability} size="large" showIcon />
             </div>
           </div>
 
-          {/* Prices grid - now shows live calculated prices */}
+          {/* Prices - Different layout for mobile vs desktop */}
           <div className="space-y-3">
-            <h3 className="text-sm font-medium text-muted-foreground">
-              Prices {hasChanges && <span className="text-yellow-600">(unsaved)</span>}
-            </h3>
-            <div className="grid grid-cols-3 gap-3">
-              <PriceCard label="Dealer" value={formatMoney(livePrice)} primary highlight={hasChanges} />
-              <PriceCard label="Retail" value={formatMoney(liveDerived.retailPrice)} highlight={hasChanges} />
-              <PriceCard label="Daraz" value={formatMoney(liveDerived.darazPrice)} highlight={hasChanges} />
+            <Label className="text-xs font-medium text-muted-foreground">Pricing</Label>
+            {isMobile ? (
+              // Mobile: Retail as hero
+              <div className="space-y-3">
+                <div className="rounded-lg bg-primary/10 p-4 text-center border-2 border-primary">
+                  <p className="text-xs text-muted-foreground mb-1">CUSTOMER PRICE</p>
+                  <p className="text-3xl font-bold tabular-nums text-primary">{formatMoney(liveDerived.customerPrice)}</p>
+                  <p className="text-xs text-muted-foreground mt-2">{customerDiscount}% off retail</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <PriceCard label="Retail" value={formatMoney(liveDerived.retailPrice)} />
+                  <PriceCard label="Dealer" value={formatMoney(livePrice)} />
+                </div>
+              </div>
+            ) : (
+              // Desktop: Dealer as hero
+              <div className="space-y-3">
+                <div className="rounded-lg bg-primary/10 p-4 text-center border-2 border-primary">
+                  <p className="text-xs text-muted-foreground mb-1">DEALER PRICE</p>
+                  <p className="text-3xl font-bold tabular-nums text-primary">{formatMoney(livePrice)}</p>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <PriceCard label="Retail" value={formatMoney(liveDerived.retailPrice)} />
+                  <div className="rounded-lg bg-muted/50 p-3 text-center">
+                    <p className="text-xs text-muted-foreground mb-1">CUSTOMER ({customerDiscount}%)</p>
+                    <p className="text-base font-semibold tabular-nums">{formatMoney(liveDerived.customerPrice)}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Customer Discount Slider */}
+          <div className="space-y-3 pt-2 border-t border-border">
+            <div className="flex items-center justify-between">
+              <Label className="text-xs font-medium">Customer Discount</Label>
+              <span className="text-sm font-semibold">{customerDiscount}%</span>
+            </div>
+            <div className="space-y-2">
+              <Slider
+                value={[customerDiscount]}
+                onValueChange={(val: number | readonly number[]) => {
+                  const arr = Array.isArray(val) ? val : [val]
+                  setCustomerDiscount(arr[0] ?? 10)
+                }}
+                min={0}
+                max={50}
+                step={1}
+                className="w-full"
+              />
+              <div className="flex justify-between text-xs text-muted-foreground">
+                <span>0%</span>
+                <span>50%</span>
+              </div>
             </div>
           </div>
 
-          {/* Edit prices */}
+          {/* Product Notes */}
+          <div className="space-y-2 pt-2 border-t border-border">
+            <Label className="text-xs font-medium">Notes</Label>
+            <Input
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="Add product notes..."
+              className="rounded-lg min-h-16"
+            />
+          </div>
+
+          {/* Edit prices section */}
           {canEditPrices && (
             <div className="space-y-3 pt-2 border-t border-border">
-              <Label className="text-sm font-medium">
-                Update Price
-              </Label>
+              <Label className="text-sm font-medium">Update Price</Label>
               <div className="space-y-2">
                 <div className="flex gap-2">
                   <Button
@@ -261,16 +354,23 @@ export function ProductDetailSheet({
                     placeholder="Enter price..."
                     value={editMode === "dealer" ? dealerPriceInput : retailPriceInput}
                     onChange={(e) => {
+                      isEditingPriceRef.current = true
                       if (editMode === "dealer") {
                         setDealerPriceInput(e.target.value)
                       } else {
                         setRetailPriceInput(e.target.value)
                       }
                     }}
+                    onBlur={() => {
+                      isEditingPriceRef.current = false
+                    }}
                     className="h-10 rounded-lg tabular-nums"
                   />
                   <Button
-                    onClick={saveDealerPrice}
+                    onClick={() => {
+                      setPriceToConfirm(livePrice)
+                      setConfirmDialogOpen(true)
+                    }}
                     disabled={saving || !hasChanges}
                     className="h-10 px-4 rounded-lg gap-2 shrink-0"
                   >
@@ -333,32 +433,46 @@ export function ProductDetailSheet({
   )
 
   // Use Drawer for mobile, Dialog for desktop
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="max-h-[85vh]">
-          <DrawerHeader className="pb-2">
-            <DrawerTitle className="text-xl leading-tight">{product?.name ?? "Product"}</DrawerTitle>
-            <p className="text-sm text-muted-foreground">{product?.brand ?? "—"}</p>
-          </DrawerHeader>
-          <div className="px-4 pb-8 overflow-y-auto">
-            <DetailContent />
-          </div>
-        </DrawerContent>
-      </Drawer>
-    )
-  }
-
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="text-lg leading-tight pr-6">{product?.name ?? "Product"}</DialogTitle>
-          <DialogDescription>{product?.brand ?? "—"}</DialogDescription>
-        </DialogHeader>
-        <DetailContent />
-      </DialogContent>
-    </Dialog>
+    <>
+      <PriceConfirmationDialog
+        open={confirmDialogOpen}
+        onOpenChange={setConfirmDialogOpen}
+        price={priceToConfirm}
+        priceDisplay={formatMoney(priceToConfirm)}
+        onConfirm={(priceType) => {
+          if (priceType === "dealer") {
+            setEditMode("dealer")
+          } else {
+            setEditMode("retail")
+          }
+          saveDealerPrice()
+        }}
+      />
+      {isMobile ? (
+        <Drawer open={open} onOpenChange={onOpenChange}>
+          <DrawerContent className="max-h-[85vh]">
+            <DrawerHeader className="pb-2">
+              <DrawerTitle className="text-xl leading-tight">{displayName}</DrawerTitle>
+              <p className="text-sm text-muted-foreground">{product?.brand ?? "—"}</p>
+            </DrawerHeader>
+            <div className="px-4 pb-8 overflow-y-auto">
+              <DetailContent />
+            </div>
+          </DrawerContent>
+        </Drawer>
+      ) : (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle className="text-lg leading-tight pr-6">{displayName}</DialogTitle>
+              <DialogDescription>{product?.brand ?? "—"}</DialogDescription>
+            </DialogHeader>
+            <DetailContent />
+          </DialogContent>
+        </Dialog>
+      )}
+    </>
   )
 }
 

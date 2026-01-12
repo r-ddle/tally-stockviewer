@@ -9,7 +9,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Upload, FileText, RefreshCcw, ChevronDown, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
+import { Upload, FileText, RefreshCcw, ChevronDown, CheckCircle2, AlertCircle, Loader2, Database } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { ownerHeaders } from "@/lib/owner"
 
@@ -39,9 +39,42 @@ export function ImportControls({
   ownerToken: string | null
 }) {
   const fileInputRef = useRef<HTMLInputElement | null>(null)
-  const [busy, setBusy] = useState<null | "auto" | "upload" | "sample" | "migrate">(null)
+  const [busy, setBusy] = useState<null | "auto" | "upload" | "sample" | "migrate" | "tally">(null)
   const [message, setMessage] = useState<{ text: string; success: boolean } | null>(null)
   const token = ownerToken
+
+  // Sync from Tally ERP 9 via ODBC API
+  const doTallySync = async () => {
+    setBusy("tally")
+    setMessage(null)
+    try {
+      const res = await fetch("/api/import/tally", {
+        method: "POST",
+        headers: ownerHeaders(token),
+      })
+      const result = await res.json() as { ok: boolean; parsedCount?: number; upsertedCount?: number; error?: string }
+
+      if (result.ok) {
+        const count = result.parsedCount ?? result.upsertedCount ?? 0
+        localStorage.setItem("tally:lastTallySyncAt", String(Date.now()))
+        onImported?.({ ok: true, parsedCount: count, upserted: count })
+        setMessage({
+          text: `Synced ${count.toLocaleString("en-IN")} products from Tally`,
+          success: true,
+        })
+      } else {
+        const err = result.error ?? "Tally sync failed"
+        setMessage({ text: err, success: false })
+        onImported?.({ ok: false, error: err })
+      }
+    } catch (e) {
+      const err = e instanceof Error ? e.message : "Tally sync failed."
+      setMessage({ text: err, success: false })
+      onImported?.({ ok: false, error: err })
+    } finally {
+      setBusy(null)
+    }
+  }
 
   const doAuto = async () => {
     setBusy("auto")
@@ -159,9 +192,14 @@ export function ImportControls({
     <div className="space-y-3">
       {/* Desktop layout */}
       <div className={cn("hidden md:flex flex-wrap items-center gap-2", compact && "flex-col sm:flex-row")}>
-        <Button onClick={doAuto} disabled={disabled} className="gap-2">
+        <Button onClick={doTallySync} disabled={disabled} className="gap-2" variant="default">
+          {busy === "tally" ? <Loader2 className="h-4 w-4 animate-spin" /> : <Database className="h-4 w-4" />}
+          {compact ? "Sync Tally" : "Sync from Tally"}
+        </Button>
+
+        <Button onClick={doAuto} disabled={disabled} className="gap-2" variant="secondary">
           {busy === "auto" ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCcw className="h-4 w-4" />}
-          {compact ? "Sync" : "Load Latest Export"}
+          {compact ? "Load File" : "Load Latest Export"}
         </Button>
 
         <input
@@ -219,13 +257,24 @@ export function ImportControls({
 
       <div className="md:hidden flex flex-col gap-3">
         <Button
-          onClick={doAuto}
+          onClick={doTallySync}
           disabled={disabled}
           size="lg"
           className="h-16 text-lg font-semibold rounded-2xl gap-3 shadow-lg active:scale-[0.98] transition-transform"
         >
-          {busy === "auto" ? <Loader2 className="h-6 w-6 animate-spin" /> : <RefreshCcw className="h-6 w-6" />}
-          Load Latest Data
+          {busy === "tally" ? <Loader2 className="h-6 w-6 animate-spin" /> : <Database className="h-6 w-6" />}
+          Sync from Tally
+        </Button>
+
+        <Button
+          onClick={doAuto}
+          disabled={disabled}
+          size="lg"
+          variant="secondary"
+          className="h-14 text-base font-semibold rounded-2xl gap-3 active:scale-[0.98] transition-transform"
+        >
+          {busy === "auto" ? <Loader2 className="h-5 w-5 animate-spin" /> : <RefreshCcw className="h-5 w-5" />}
+          Load from File
         </Button>
 
         <div className="grid grid-cols-2 gap-3">

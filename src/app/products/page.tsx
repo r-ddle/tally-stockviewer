@@ -7,19 +7,13 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Label } from "@/components/ui/label"
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { computeDerivedPrices, formatMoney, formatQty } from "@/lib/pricing"
 import type { Availability } from "@/lib/domain"
-import { Search, X, SlidersHorizontal, RefreshCcw, Download } from "lucide-react"
+import { Search, X, SlidersHorizontal, RefreshCcw, Download, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { useAuthContext } from "@/components/auth-provider"
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle } from "@/components/ui/drawer"
+import { Drawer, DrawerClose, DrawerContent, DrawerFooter, DrawerHeader, DrawerTitle, DrawerTrigger } from "@/components/ui/drawer"
 
 type ProductRow = {
   id: string
@@ -356,16 +350,157 @@ export default function ProductsPage() {
             )}
           </div>
 
-          {/* Filter button - icon only */}
-          <Button
-            size="icon"
-            variant="outline"
-            onClick={() => setFilterOpen(true)}
-            className="h-11 w-11 rounded-lg shrink-0"
-            title="Open filters"
-          >
-            <SlidersHorizontal className="h-5 w-5" />
-          </Button>
+          {/* Filter button + drawer (shadcn/vaul pattern) */}
+          <Drawer open={filterOpen} onOpenChange={setFilterOpen}>
+            <DrawerTrigger asChild>
+              <Button
+                size="icon"
+                variant="outline"
+                className="h-11 w-11 rounded-lg shrink-0"
+                title="Open filters"
+              >
+                <SlidersHorizontal className="h-5 w-5" />
+              </Button>
+            </DrawerTrigger>
+
+            <DrawerContent>
+              <DrawerHeader className="pb-2">
+                <div className="flex items-center justify-between gap-3">
+                  <DrawerTitle>Filters</DrawerTitle>
+                  <DrawerClose asChild>
+                    <Button variant="outline" size="sm" className="rounded-lg bg-transparent">
+                      Done
+                    </Button>
+                  </DrawerClose>
+                </div>
+              </DrawerHeader>
+
+              <div className="px-4 pb-4 space-y-4 overflow-y-auto flex-1">
+                {/* Brand filter (no portal dropdowns) */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Brand</Label>
+                  <ScrollArea className="h-32 rounded-xl border p-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setBrand("all")}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors",
+                          brand === "all" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
+                        )}
+                      >
+                        {brand === "all" && <Check className="h-4 w-4" />}
+                        All Brands
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setBrand("__unknown__")}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors",
+                          brand === "__unknown__" ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
+                        )}
+                      >
+                        {brand === "__unknown__" && <Check className="h-4 w-4" />}
+                        No Brand
+                      </button>
+                      {brands.map((b) => (
+                        <button
+                          key={b}
+                          type="button"
+                          onClick={() => setBrand(b)}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 rounded-full px-3 py-2 text-sm font-medium transition-colors",
+                            brand === b ? "bg-primary text-primary-foreground" : "bg-muted hover:bg-muted/80"
+                          )}
+                        >
+                          {brand === b && <Check className="h-4 w-4" />}
+                          {b}
+                        </button>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                </div>
+
+                {/* Availability filter */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Status</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: "all", label: "All" },
+                      { value: "IN_STOCK", label: "In Stock" },
+                      { value: "OUT_OF_STOCK", label: "Out" },
+                      { value: "NEGATIVE", label: "Negative" },
+                    ].map((opt) => (
+                      <Button
+                        key={opt.value}
+                        variant={availability === opt.value ? "default" : "outline"}
+                        onClick={() => setAvailability(opt.value as "all" | Availability)}
+                        className={cn("rounded-lg", availability !== opt.value && "bg-transparent")}
+                      >
+                        {opt.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sort options */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">Sort by</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { value: "name", label: "Name" },
+                      { value: "qty", label: "Quantity" },
+                      { value: "dealerPrice", label: "Dealer Price" },
+                      { value: "retail", label: "Retail Price" },
+                    ].map((opt) => (
+                      <Button
+                        key={opt.value}
+                        variant={sortKey === opt.value ? "default" : "outline"}
+                        onClick={() => setSortKey(opt.value as SortKey)}
+                        className={cn("rounded-lg", sortKey !== opt.value && "bg-transparent")}
+                      >
+                        {opt.label}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Sort direction */}
+                <div className="flex gap-2">
+                  <Button
+                    variant={sortDir === "asc" ? "default" : "outline"}
+                    onClick={() => setSortDir("asc")}
+                    className={cn("flex-1 rounded-lg", sortDir !== "asc" && "bg-transparent")}
+                  >
+                    A → Z
+                  </Button>
+                  <Button
+                    variant={sortDir === "desc" ? "default" : "outline"}
+                    onClick={() => setSortDir("desc")}
+                    className={cn("flex-1 rounded-lg", sortDir !== "desc" && "bg-transparent")}
+                  >
+                    Z → A
+                  </Button>
+                </div>
+              </div>
+
+              <DrawerFooter className="pt-2">
+                {hasFilters && (
+                  <Button
+                    variant="outline"
+                    onClick={() => {
+                      clearFilters()
+                      setFilterOpen(false)
+                    }}
+                    className="w-full rounded-lg bg-transparent"
+                  >
+                    <X className="h-4 w-4 mr-2" />
+                    Clear Filters
+                  </Button>
+                )}
+              </DrawerFooter>
+            </DrawerContent>
+          </Drawer>
 
           {/* Refresh button */}
           <Button
@@ -407,97 +542,6 @@ export default function ProductsPage() {
         shouldFocusPrice={focusPriceInput}
       />
 
-      {/* Filter drawer */}
-      <Drawer open={filterOpen} onOpenChange={setFilterOpen}>
-        <DrawerContent>
-          <DrawerHeader>
-            <DrawerTitle>Filters</DrawerTitle>
-          </DrawerHeader>
-          <div className="px-4 pb-6 space-y-4">
-            {/* Brand filter */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Brand</Label>
-              <Select value={brand} onValueChange={(v) => setBrand(v ?? "all")}>
-                <SelectTrigger className="rounded-lg">
-                  <SelectValue>All Brands</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Brands</SelectItem>
-                  <SelectItem value="__unknown__">(No Brand)</SelectItem>
-                  {brands.map((b) => (
-                    <SelectItem key={b} value={b}>{b}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Availability filter */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Status</Label>
-              <Select value={availability} onValueChange={(v) => setAvailability((v ?? "all") as "all" | Availability)}>
-                <SelectTrigger className="rounded-lg">
-                  <SelectValue>All Status</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="IN_STOCK">In Stock</SelectItem>
-                  <SelectItem value="OUT_OF_STOCK">Out of Stock</SelectItem>
-                  <SelectItem value="NEGATIVE">Negative</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Sort options */}
-            <div className="space-y-2">
-              <Label className="text-sm font-medium">Sort by</Label>
-              <Select value={sortKey} onValueChange={(v) => setSortKey((v ?? "name") as SortKey)}>
-                <SelectTrigger className="rounded-lg">
-                  <SelectValue>Sort by</SelectValue>
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="name">Name</SelectItem>
-                  <SelectItem value="qty">Quantity</SelectItem>
-                  <SelectItem value="dealerPrice">Dealer Price</SelectItem>
-                  <SelectItem value="retail">Retail Price</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Sort direction */}
-            <div className="flex gap-2">
-              <Button
-                variant={sortDir === "asc" ? "default" : "outline"}
-                onClick={() => setSortDir("asc")}
-                className="flex-1 rounded-lg"
-              >
-                A → Z
-              </Button>
-              <Button
-                variant={sortDir === "desc" ? "default" : "outline"}
-                onClick={() => setSortDir("desc")}
-                className="flex-1 rounded-lg"
-              >
-                Z → A
-              </Button>
-            </div>
-
-            {/* Clear filters */}
-            {hasFilters && (
-              <Button
-                variant="outline"
-                onClick={() => {
-                  clearFilters()
-                  setFilterOpen(false)
-                }}
-                className="w-full rounded-lg"
-              >
-                <X className="h-4 w-4 mr-2" />
-                Clear Filters
-              </Button>
-            )}
-          </div>
-        </DrawerContent>
-      </Drawer>
     </div>
   )
 }

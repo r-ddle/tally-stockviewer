@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Badge } from "@/components/ui/badge"
-import { Search, X, SlidersHorizontal, ArrowUpDown, Filter } from "lucide-react"
+import { Search, X, SlidersHorizontal, ArrowUpDown, Filter, Check } from "lucide-react"
 import type { Availability } from "@/lib/domain"
 import { cn } from "@/lib/utils"
 import {
@@ -17,6 +17,7 @@ import {
   DrawerTitle,
   DrawerTrigger,
 } from "@/components/ui/drawer"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 export type SortKey = "name" | "qty" | "dealerPrice" | "retail" | "daraz"
 
@@ -204,7 +205,7 @@ export function DataTableToolbar({
         {/* Filter button and results count */}
         <div className="flex items-center justify-between gap-3">
           <Drawer open={drawerOpen} onOpenChange={setDrawerOpen}>
-            <DrawerTrigger>
+            <DrawerTrigger asChild>
               <Button
                 variant="outline"
                 size="lg"
@@ -226,31 +227,56 @@ export function DataTableToolbar({
               <DrawerHeader>
                 <DrawerTitle className="text-xl">Filter & Sort</DrawerTitle>
               </DrawerHeader>
-              <div className="px-4 pb-4 space-y-6 overflow-y-auto">
-                {/* Brand filter */}
+              <div className="px-4 pb-4 space-y-6 overflow-y-auto flex-1">
+                {/* Brand filter - scrollable button list */}
                 <div className="space-y-3">
                   <label className="text-base font-semibold text-foreground">Brand</label>
-                  <Select value={brand} onValueChange={(v) => onBrandChange(v ?? "all")}>
-                    <SelectTrigger className="h-14 text-lg rounded-2xl">
-                      <SelectValue>All Brands</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="all" className="text-lg py-3">
+                  <ScrollArea className="h-[140px] rounded-2xl border p-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => onBrandChange("all")}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium transition-colors",
+                          brand === "all"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted hover:bg-muted/80 text-foreground"
+                        )}
+                      >
+                        {brand === "all" && <Check className="h-4 w-4" />}
                         All Brands
-                      </SelectItem>
-                      <SelectItem value="__unknown__" className="text-lg py-3">
-                        (No Brand)
-                      </SelectItem>
+                      </button>
+                      <button
+                        onClick={() => onBrandChange("__unknown__")}
+                        className={cn(
+                          "inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium transition-colors",
+                          brand === "__unknown__"
+                            ? "bg-primary text-primary-foreground"
+                            : "bg-muted hover:bg-muted/80 text-foreground"
+                        )}
+                      >
+                        {brand === "__unknown__" && <Check className="h-4 w-4" />}
+                        No Brand
+                      </button>
                       {brands.map((b) => (
-                        <SelectItem key={b} value={b} className="text-lg py-3">
+                        <button
+                          key={b}
+                          onClick={() => onBrandChange(b)}
+                          className={cn(
+                            "inline-flex items-center gap-1.5 px-4 py-2.5 rounded-full text-sm font-medium transition-colors",
+                            brand === b
+                              ? "bg-primary text-primary-foreground"
+                              : "bg-muted hover:bg-muted/80 text-foreground"
+                          )}
+                        >
+                          {brand === b && <Check className="h-4 w-4" />}
                           {b}
-                        </SelectItem>
+                        </button>
                       ))}
-                    </SelectContent>
-                  </Select>
+                    </div>
+                  </ScrollArea>
                 </div>
 
-                {/* Availability filter */}
+                {/* Availability filter - button grid */}
                 <div className="space-y-3">
                   <label className="text-base font-semibold text-foreground">Status</label>
                   <div className="grid grid-cols-2 gap-3">
@@ -276,31 +302,31 @@ export function DataTableToolbar({
                   </div>
                 </div>
 
-                {/* Sort options */}
+                {/* Sort options - button grid */}
                 <div className="space-y-3">
                   <label className="text-base font-semibold text-foreground">Sort By</label>
-                  <Select value={sortKey} onValueChange={(v) => onSortKeyChange((v ?? "name") as SortKey)}>
-                    <SelectTrigger className="h-14 text-lg rounded-2xl">
-                      <SelectValue>Name</SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="name" className="text-lg py-3">
-                        Name
-                      </SelectItem>
-                      <SelectItem value="qty" className="text-lg py-3">
-                        Quantity
-                      </SelectItem>
-                      <SelectItem value="dealerPrice" className="text-lg py-3">
-                        Dealer Price
-                      </SelectItem>
-                      <SelectItem value="retail" className="text-lg py-3">
-                        Retail Price
-                      </SelectItem>
-                      <SelectItem value="daraz" className="text-lg py-3">
-                        Daraz Price
-                      </SelectItem>
-                    </SelectContent>
-                  </Select>
+                  <div className="grid grid-cols-2 gap-3">
+                    {[
+                      { value: "name", label: "Name" },
+                      { value: "qty", label: "Quantity" },
+                      { value: "dealerPrice", label: "Dealer Price" },
+                      { value: "retail", label: "Retail" },
+                      { value: "daraz", label: "Daraz" },
+                    ].map((opt) => (
+                      <Button
+                        key={opt.value}
+                        variant={sortKey === opt.value ? "default" : "outline"}
+                        size="lg"
+                        onClick={() => onSortKeyChange(opt.value as SortKey)}
+                        className={cn(
+                          "h-12 text-sm font-semibold rounded-2xl active:scale-[0.98] transition-transform",
+                          sortKey !== opt.value && "bg-transparent",
+                        )}
+                      >
+                        {opt.label}
+                      </Button>
+                    ))}
+                  </div>
                   <Button
                     variant="outline"
                     size="lg"
@@ -323,8 +349,8 @@ export function DataTableToolbar({
                     Clear All
                   </Button>
                 )}
-                <DrawerClose>
-                  <Button size="lg" className="flex-1 h-14 text-base font-semibold rounded-2xl">
+                <DrawerClose asChild>
+                  <Button size="lg" className={cn("h-14 text-base font-semibold rounded-2xl", hasFilters ? "flex-1" : "w-full")}>
                     Show Results
                   </Button>
                 </DrawerClose>
